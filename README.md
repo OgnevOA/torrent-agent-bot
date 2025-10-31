@@ -182,6 +182,133 @@ Torrent_agent/
 - Rate limiting: The scraper includes basic rate limiting, but be respectful of rutracker.org's servers
 - Session management: Rutracker sessions are maintained during bot operation
 
+## Deployment on TrueNAS Scale
+
+### Option 1: Using TrueNAS Scale App Interface (Recommended)
+
+1. **Build and push Docker image** (if using registry):
+   ```bash
+   # Build the image
+   docker build -t your-username/torrent-agent:latest .
+   
+   # Push to Docker Hub
+   docker push your-username/torrent-agent:latest
+   
+   # Or push to GitHub Container Registry
+   docker tag your-username/torrent-agent:latest ghcr.io/your-username/torrent-agent:latest
+   docker push ghcr.io/your-username/torrent-agent:latest
+   ```
+
+2. **In TrueNAS Scale Web UI**:
+   - Go to **Apps** → **Available Applications**
+   - Click **Launch Docker Image** or **Custom App**
+   - Configure the following:
+
+   **Application Name**: `torrent-bot`
+   
+   **Container Image**: 
+   - If using Docker Hub: `your-username/torrent-agent:latest`
+   - If using GitHub: `ghcr.io/your-username/torrent-agent:latest`
+   - Or use the GitHub Actions build (if set up)
+   
+   **Environment Variables** (add all required):
+   ```
+   TG_BOT_TOKEN=your_token_here
+   ALLOWED_CHAT_IDS=your_chat_id (optional)
+   RUTRACKER_USERNAME=your_username
+   RUTRACKER_PASSWORD=your_password
+   QBITTORRENT_URL=http://your-truenas-ip:8080
+   QBITTORRENT_USERNAME=admin
+   QBITTORRENT_PASSWORD=your_password
+   GOOGLE_API_KEY=your_api_key
+   ```
+
+   **Network Settings**:
+   - **Network Mode**: `Host` (to access qBittorrent on same machine)
+   - OR use **Bridge** network if qBittorrent is accessible by hostname/IP
+   
+   **Storage/Volumes** (optional):
+   - Mount a persistent volume at `/app/logs` for log persistence
+   
+   **Resource Limits** (optional):
+   - CPU: 0.5-1 core
+   - Memory: 512MB-1GB
+
+3. **Deploy** and check logs in TrueNAS Scale Apps interface
+
+### Option 2: Using Docker Compose via Shell
+
+If you have SSH access to your TrueNAS Scale:
+
+1. **Clone repository**:
+   ```bash
+   git clone <your-repo-url>
+   cd Torrent_agent
+   ```
+
+2. **Create `.env` file** with all your credentials (same as local setup)
+
+3. **Build and run**:
+   ```bash
+   docker-compose up -d
+   ```
+
+4. **Check logs**:
+   ```bash
+   docker-compose logs -f torrent-bot
+   ```
+
+### Option 3: GitHub Actions Auto-Build (Advanced)
+
+Set up GitHub Actions to automatically build and push Docker images on push:
+
+1. Create `.github/workflows/docker-build.yml`:
+   ```yaml
+   name: Build and Push Docker Image
+   
+   on:
+     push:
+       branches: [ main ]
+   
+   jobs:
+     build:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v3
+         - name: Set up Docker Buildx
+           uses: docker/setup-buildx-action@v2
+         - name: Login to GitHub Container Registry
+           uses: docker/login-action@v2
+           with:
+             registry: ghcr.io
+             username: ${{ github.actor }}
+             password: ${{ secrets.GITHUB_TOKEN }}
+         - name: Build and push
+           uses: docker/build-push-action@v4
+           with:
+             context: .
+             push: true
+             tags: ghcr.io/${{ github.repository }}:latest
+   ```
+
+2. Then use `ghcr.io/your-username/Torrent_agent:latest` as the container image in TrueNAS Scale
+
+### Important Notes for TrueNAS Scale
+
+- **qBittorrent URL**: If qBittorrent is running on the same TrueNAS Scale machine, use:
+  - `http://localhost:8080` (if using host network mode)
+  - `http://your-truenas-ip:8080` (if using bridge network)
+  - `http://qbittorrent-service-name:8080` (if qBittorrent is also a container)
+
+- **Network Access**: The bot needs internet access for:
+  - Telegram API
+  - Rutracker.org
+  - Google Gemini API
+
+- **Logs**: Consider mounting a persistent volume for logs if you want them to survive container restarts
+
+- **Updates**: To update the bot, rebuild the image and redeploy through TrueNAS Scale Apps interface
+
 ## License
 
 MIT
