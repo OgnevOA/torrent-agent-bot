@@ -15,6 +15,133 @@ from src.bot.middleware import require_authorized_chat
 logger = logging.getLogger(__name__)
 
 
+def format_bytes(bytes_size: int) -> str:
+    """
+    Format bytes to human-readable format.
+    
+    Args:
+        bytes_size: Size in bytes
+        
+    Returns:
+        Formatted string (e.g., "1.5 MB", "500 KB")
+    """
+    if bytes_size == 0:
+        return "0 B"
+    
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if bytes_size < 1024.0:
+            return f"{bytes_size:.1f} {unit}" if bytes_size >= 1 else f"{bytes_size:.0f} {unit}"
+        bytes_size /= 1024.0
+    return f"{bytes_size:.1f} PB"
+
+
+def format_speed(bytes_per_sec: int) -> str:
+    """
+    Format download/upload speed to human-readable format.
+    
+    Args:
+        bytes_per_sec: Speed in bytes per second
+        
+    Returns:
+        Formatted string (e.g., "1.2 MB/s", "500 KB/s")
+    """
+    return format_bytes(bytes_per_sec) + "/s"
+
+
+def format_eta(eta_seconds: int) -> str:
+    """
+    Format ETA from seconds to human-readable format.
+    
+    Args:
+        eta_seconds: ETA in seconds (-1 if unknown)
+        
+    Returns:
+        Formatted string (e.g., "10m", "1h 30m", "∞")
+    """
+    if eta_seconds < 0:
+        return "∞"
+    
+    if eta_seconds < 60:
+        return f"{eta_seconds}s"
+    elif eta_seconds < 3600:
+        minutes = eta_seconds // 60
+        seconds = eta_seconds % 60
+        return f"{minutes}m{seconds}s" if seconds > 0 else f"{minutes}m"
+    else:
+        hours = eta_seconds // 3600
+        minutes = (eta_seconds % 3600) // 60
+        if minutes > 0:
+            return f"{hours}h {minutes}m"
+        return f"{hours}h"
+
+
+def format_torrent_status(torrent: dict) -> str:
+    """
+    Format individual torrent status into compact single-line format.
+    
+    Args:
+        torrent: Torrent dictionary from qBittorrent API
+        
+    Returns:
+        Formatted string with emoji and torrent info
+    """
+    name = torrent.get('name', 'Unknown')
+    state = torrent.get('state', '')
+    progress_decimal = torrent.get('progress', 0)  # 0-1 decimal
+    progress = progress_decimal * 100  # Convert to percentage
+    dlspeed = torrent.get('dlspeed', 0)
+    upspeed = torrent.get('upspeed', 0)
+    eta = torrent.get('eta', -1)
+    size = torrent.get('size', 0)
+    # Calculate completed size from progress
+    completed = int(size * progress_decimal) if size > 0 else 0
+    # Try multiple possible field names for seeds/leechers
+    num_seeds = torrent.get('num_seeds', torrent.get('seeders', 0))
+    num_leechs = torrent.get('num_leechs', torrent.get('leechers', 0))
+    
+    # Choose emoji based on state
+    if state == 'downloading':
+        emoji = '🟢'
+    elif state == 'seeding':
+        emoji = '🔵'
+    else:
+        emoji = '⚪'
+    
+    # Truncate long names (max 50 chars)
+    if len(name) > 50:
+        name = name[:47] + "..."
+    
+    # Format progress
+    progress_str = f"{progress:.1f}%" if progress < 100 else "100%"
+    
+    # Format speeds
+    dl_speed_str = format_speed(dlspeed) if dlspeed > 0 else "0 B/s"
+    up_speed_str = format_speed(upspeed) if upspeed > 0 else "0 B/s"
+    
+    # Format ETA
+    eta_str = format_eta(int(eta))
+    
+    # Format size
+    size_str = format_bytes(size)
+    completed_str = format_bytes(completed) if completed > 0 else "0 B"
+    
+    # Build status line
+    if state == 'downloading':
+        status_line = (
+            f"{emoji} *{name}*\n"
+            f"   {progress_str} • ↓ {dl_speed_str} • ↑ {up_speed_str} • ETA: {eta_str}\n"
+            f"   {completed_str} / {size_str} • 🌱 {num_seeds} • 🐛 {num_leechs}"
+        )
+    else:  # seeding
+        status_line = (
+            f"{emoji} *{name}*\n"
+            f"   {progress_str} • ↓ {dl_speed_str} • ↑ {up_speed_str}\n"
+            f"   {size_str} • 🌱 {num_seeds} • 🐛 {num_leechs}"
+        )
+    
+    return status_line
+
+
 @require_authorized_chat
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command."""
@@ -29,6 +156,9 @@ I can help you search for torrents on rutracker.org and add them directly to you
 2. I'll search rutracker.org and show you numbered results
 3. Reply with the number (e.g., "Download the third one" or "3")
 4. I'll add it to your qBittorrent automatically
+
+*Commands:*
+• /status - View active torrents (downloading/seeding)
 
 *Examples:*
 • "Find Matrix movie torrent with good seeders"
@@ -53,6 +183,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /start - Show welcome message
 /help - Show this help message
 /search - Start a new search
+/status - Show active torrents (downloading/seeding)
 
 *Usage:*
 1. Send me a natural language search query (e.g., "Find X, with russian dub, Fox Crime preferred")
@@ -77,6 +208,69 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🔍 Send me a search query. For example: 'Find Matrix movie torrent'"
     )
+
+
+@require_authorized_chat
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /status command - show active torrents."""
+    logger.info(f"Received /status command from user {update.effective_user.id}")
+    
+    status_message = await update.message.reply_text("⏳ Fetching torrent status...")
+    
+    try:
+        qb_client = QBittorrentClient()
+        active_torrents = qb_client.get_active_torrents()
+        
+        if active_torrents is None:
+            await status_message.edit_text(
+                "❌ Failed to connect to qBittorrent.\n\n"
+                "Please check:\n"
+                "• qBittorrent is running\n"
+                "• API is enabled in qBittorrent settings\n"
+                "• Connection details are correct"
+            )
+            return
+        
+        if not active_torrents:
+            await status_message.edit_text(
+                "✅ No active torrents (downloading or seeding) at the moment."
+            )
+            return
+        
+        # Format torrents
+        formatted_lines = ["📊 *Active Torrents:*\n"]
+        for torrent in active_torrents:
+            formatted_lines.append(format_torrent_status(torrent))
+            formatted_lines.append("")  # Empty line between torrents
+        
+        message = "\n".join(formatted_lines)
+        
+        # Telegram has a 4096 character limit per message
+        if len(message) > 4000:
+            # Split into multiple messages if too long
+            # For now, truncate and add note
+            truncated_count = 0
+            truncated_message = formatted_lines[0]  # Keep header
+            for i, line in enumerate(formatted_lines[1:], 1):
+                test_message = truncated_message + "\n" + line
+                if len(test_message) > 4000:
+                    truncated_count = len(active_torrents) - (i // 3)  # Approximate
+                    break
+                truncated_message = test_message
+            message = truncated_message
+            if truncated_count > 0:
+                message += f"\n\n... and {truncated_count} more torrents"
+        
+        await status_message.edit_text(
+            message,
+            parse_mode="Markdown"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting torrent status: {e}", exc_info=True)
+        await status_message.edit_text(
+            f"❌ Error getting torrent status: {str(e)}\n\nPlease try again."
+        )
 
 
 @require_authorized_chat

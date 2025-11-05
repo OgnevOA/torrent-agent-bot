@@ -1,6 +1,6 @@
 """qBittorrent API client."""
 import logging
-from typing import Optional
+from typing import Optional, List
 
 from qbittorrentapi import Client, LoginFailed, APIConnectionError
 
@@ -98,6 +98,29 @@ class QBittorrentClient:
                 return [t.dict() for t in torrents]
         except Exception as e:
             logger.error(f"Failed to get torrent info: {e}")
+            return None
+    
+    def get_active_torrents(self) -> Optional[List[dict]]:
+        """
+        Get active torrents (downloading and seeding, excluding queued).
+        
+        Returns:
+            List of active torrent dictionaries or None if error
+        """
+        if not self._authenticated:
+            if not self.connect():
+                return None
+        
+        try:
+            torrents = self.client.torrents_info()
+            # Filter to only downloading and seeding torrents (exclude queued)
+            active_torrents = [
+                t.dict() for t in torrents 
+                if t.state in ['downloading', 'seeding']
+            ]
+            return active_torrents
+        except Exception as e:
+            logger.error(f"Failed to get active torrents: {e}")
             return None
     
     def disconnect(self):

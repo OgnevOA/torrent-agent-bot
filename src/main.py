@@ -10,6 +10,7 @@ from src.bot.handlers import (
     start_command,
     help_command,
     search_command,
+    status_command,
     handle_message,
     error_handler
 )
@@ -37,6 +38,7 @@ def create_application() -> Application:
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("search", search_command))
+    application.add_handler(CommandHandler("status", status_command))
     
     # Register message handler for text messages (routes to search or download)
     application.add_handler(MessageHandler(
