@@ -92,10 +92,10 @@ class QBittorrentClient:
         try:
             if torrent_hash:
                 torrents = self.client.torrents_info(torrent_hashes=torrent_hash)
-                return torrents[0].dict() if torrents else None
+                return dict(torrents[0]) if torrents else None
             else:
                 torrents = self.client.torrents_info()
-                return [t.dict() for t in torrents]
+                return [dict(t) for t in torrents]
         except Exception as e:
             logger.error(f"Failed to get torrent info: {e}")
             return None
@@ -113,10 +113,12 @@ class QBittorrentClient:
         
         try:
             torrents = self.client.torrents_info()
-            # Filter to only downloading and seeding torrents (exclude queued)
+            # Filter to only downloading and seeding torrents
+            # Seeding states: 'uploading', 'stalledUP', 'queuedUP'
+            # Downloading states: 'downloading', 'stalledDL', 'queuedDL'
             active_torrents = [
-                t.dict() for t in torrents 
-                if t.state in ['downloading', 'seeding']
+                dict(t) for t in torrents 
+                if t.state in ['downloading', 'seeding', 'uploading', 'stalledUP']
             ]
             return active_torrents
         except Exception as e:

@@ -98,11 +98,17 @@ def format_torrent_status(torrent: dict) -> str:
     # Try multiple possible field names for seeds/leechers
     num_seeds = torrent.get('num_seeds', torrent.get('seeders', 0))
     num_leechs = torrent.get('num_leechs', torrent.get('leechers', 0))
+    num_complete = torrent.get('num_complete', 0)
+    num_incomplete = torrent.get('num_incomplete', 0)
+    
+    # Format seeds and leechers with complete/incomplete counts
+    seeds_str = f"{num_seeds}({num_complete})"
+    leechs_str = f"{num_leechs}({num_incomplete})"
     
     # Choose emoji based on state
     if state == 'downloading':
         emoji = '🟢'
-    elif state == 'seeding':
+    elif state in ['seeding', 'uploading', 'stalledUP', 'queuedUP']:
         emoji = '🔵'
     else:
         emoji = '⚪'
@@ -130,13 +136,19 @@ def format_torrent_status(torrent: dict) -> str:
         status_line = (
             f"{emoji} *{name}*\n"
             f"   {progress_str} • ↓ {dl_speed_str} • ↑ {up_speed_str} • ETA: {eta_str}\n"
-            f"   {completed_str} / {size_str} • 🌱 {num_seeds} • 🐛 {num_leechs}"
+            f"   {completed_str} / {size_str} • 🌱 {seeds_str} • 🐛 {leechs_str}"
         )
-    else:  # seeding
+    elif state in ['seeding', 'uploading', 'stalledUP', 'queuedUP']:  # seeding/uploading states
         status_line = (
             f"{emoji} *{name}*\n"
             f"   {progress_str} • ↓ {dl_speed_str} • ↑ {up_speed_str}\n"
-            f"   {size_str} • 🌱 {num_seeds} • 🐛 {num_leechs}"
+            f"   {size_str} • 🌱 {seeds_str} • 🐛 {leechs_str}"
+        )
+    else:
+        status_line = (
+            f"{emoji} *{name}*\n"
+            f"   {progress_str} • ↓ {dl_speed_str} • ↑ {up_speed_str}\n"
+            f"   {size_str} • 🌱 {seeds_str} • 🐛 {leechs_str}"
         )
     
     return status_line
