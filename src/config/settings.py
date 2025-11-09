@@ -31,6 +31,15 @@ class Settings(BaseSettings):
     # Google Gemini
     google_api_key: str
     
+    # Web App Configuration
+    # Note: Telegram Mini Apps require HTTPS (except localhost)
+    # For local testing, you can use:
+    # - http://localhost:27800 (if testing on same device)
+    # - A tunnel service like ngrok or Cloudflare Tunnel
+    web_app_url: str = Field(default="https://torrents.guagohomeassistant.space", description="URL for Telegram Mini App")
+    web_server_host: str = Field(default="0.0.0.0", description="Host for Flask web server")
+    web_server_port: int = Field(default=27800, description="Port for Flask web server")
+    
     def get_allowed_chat_ids(self) -> List[int]:
         """Parse allowed_chat_ids string into a list of integers."""
         if not self.allowed_chat_ids:

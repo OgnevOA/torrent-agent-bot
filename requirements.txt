@@ -8,4 +8,6 @@ qbittorrent-api>=2023.10.50
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
 lxml>=4.9.0
+flask>=3.0.0
+werkzeug>=3.0.0
 

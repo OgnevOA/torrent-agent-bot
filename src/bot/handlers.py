@@ -3,7 +3,7 @@ import logging
 import re
 from typing import List, Optional
 
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import ContextTypes
 
 from src.scrapers.rutracker import RutrackerScraper
@@ -11,6 +11,7 @@ from src.scrapers.models import TorrentResult
 from src.agent.langchain_agent import TorrentSearchAgent
 from src.qbittorrent.client import QBittorrentClient
 from src.bot.middleware import require_authorized_chat
+from src.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +172,7 @@ I can help you search for torrents on rutracker.org and add them directly to you
 
 *Commands:*
 • /status - View active torrents (downloading/seeding)
+• /ui - Open web interface with all torrents
 
 *Examples:*
 • "Find Matrix movie torrent with good seeders"
@@ -196,6 +198,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /help - Show this help message
 /search - Start a new search
 /status - Show active torrents (downloading/seeding)
+/ui - Open web interface with all torrents
 
 *Usage:*
 1. Send me a natural language search query (e.g., "Find X, with russian dub, Fox Crime preferred")
@@ -283,6 +286,27 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_message.edit_text(
             f"❌ Error getting torrent status: {str(e)}\n\nPlease try again."
         )
+
+
+@require_authorized_chat
+async def ui_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /ui command - open Telegram Mini App."""
+    logger.info(f"Received /ui command from user {update.effective_user.id}")
+    
+    web_app_url = settings.web_app_url
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton(
+            text="📱 Open Torrent Manager",
+            web_app=WebAppInfo(url=web_app_url)
+        )
+    ]])
+    
+    await update.message.reply_text(
+        "📱 *Torrent Manager*\n\n"
+        "Click the button below to open the web interface with all your torrents.",
+        parse_mode="Markdown",
+        reply_markup=keyboard
+    )
 
 
 @require_authorized_chat

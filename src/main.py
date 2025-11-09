@@ -1,6 +1,7 @@
 """Entry point and bot initialization."""
 import logging
 import sys
+import threading
 from pathlib import Path
 
 from telegram import Update
@@ -11,10 +12,12 @@ from src.bot.handlers import (
     help_command,
     search_command,
     status_command,
+    ui_command,
     handle_message,
     error_handler
 )
 from src.config.settings import settings
+from src.web.server import run_server
 
 
 # Configure logging
@@ -39,6 +42,7 @@ def create_application() -> Application:
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("search", search_command))
     application.add_handler(CommandHandler("status", status_command))
+    application.add_handler(CommandHandler("ui", ui_command))
     
     # Register message handler for text messages (routes to search or download)
     application.add_handler(MessageHandler(
@@ -78,6 +82,17 @@ def main():
             logger.warning(f"   Expected: 8441904924...")
             logger.warning(f"   Got:      {settings.telegram_bot_token[:20]}...")
             logger.warning("   This might be from system environment variables, not .env file!")
+        
+        # Start Flask web server in background thread
+        web_server_thread = threading.Thread(
+            target=run_server,
+            args=(settings.web_server_host, settings.web_server_port, False),
+            daemon=True,
+            name="FlaskWebServer"
+        )
+        web_server_thread.start()
+        logger.info(f"Flask web server started on {settings.web_server_host}:{settings.web_server_port}")
+        logger.info(f"Web app URL: {settings.web_app_url}")
         
         # Create and run application
         application = create_application()
