@@ -56,7 +56,7 @@ function renderTorrent(torrent) {
             <div class="torrent-header">
                 <div class="torrent-name">${escapeHtml(torrent.name)}</div>
                 <div class="torrent-status ${statusInfo.class}">
-                    ${statusInfo.emoji} ${torrent.state} TEST
+                    ${statusInfo.emoji} ${torrent.state}
                 </div>
             </div>
             <div class="progress-container">
