@@ -120,6 +120,7 @@ def get_torrents():
             progress_percent = progress_decimal * 100
             
             formatted_torrent = {
+                'hash': torrent.get('hash', ''),
                 'name': torrent.get('name', 'Unknown'),
                 'size': torrent.get('size', 0),
                 'progress': round(progress_percent, 1),
@@ -147,6 +148,7 @@ def format_torrents(torrents: list) -> list:
         progress_percent = progress_decimal * 100
         
         formatted_torrent = {
+            'hash': torrent.get('hash', ''),
             'name': torrent.get('name', 'Unknown'),
             'size': torrent.get('size', 0),
             'progress': round(progress_percent, 1),
@@ -226,6 +228,140 @@ def handle_connect(auth):
 def handle_disconnect():
     """Handle WebSocket disconnection."""
     logger.info(f"WebSocket client disconnected: {request.sid}")
+
+
+def require_auth():
+    """Helper decorator to validate Telegram Web App authentication."""
+    init_data = request.headers.get('X-Telegram-Init-Data') or request.args.get('_auth')
+    if not init_data:
+        return None
+    return validate_telegram_webapp(init_data)
+
+
+@app.route('/api/torrents/<torrent_hash>/pause', methods=['POST'])
+def pause_torrent(torrent_hash):
+    """Pause/stop a torrent."""
+    user_id = require_auth()
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        qb_client = QBittorrentClient()
+        success = qb_client.pause_torrent(torrent_hash)
+        
+        if success:
+            return jsonify({'success': True, 'message': 'Torrent paused'})
+        else:
+            return jsonify({'error': 'Failed to pause torrent'}), 500
+    except Exception as e:
+        logger.error(f"Error pausing torrent: {e}", exc_info=True)
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@app.route('/api/torrents/<torrent_hash>/resume', methods=['POST'])
+def resume_torrent(torrent_hash):
+    """Resume a paused torrent."""
+    user_id = require_auth()
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        qb_client = QBittorrentClient()
+        success = qb_client.resume_torrent(torrent_hash)
+        
+        if success:
+            return jsonify({'success': True, 'message': 'Torrent resumed'})
+        else:
+            return jsonify({'error': 'Failed to resume torrent'}), 500
+    except Exception as e:
+        logger.error(f"Error resuming torrent: {e}", exc_info=True)
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@app.route('/api/torrents/<torrent_hash>/delete', methods=['POST'])
+def delete_torrent(torrent_hash):
+    """Delete a torrent."""
+    user_id = require_auth()
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        data = request.get_json() or {}
+        delete_files = data.get('delete_files', False)
+        
+        qb_client = QBittorrentClient()
+        success = qb_client.delete_torrent(torrent_hash, delete_files=delete_files)
+        
+        if success:
+            return jsonify({'success': True, 'message': 'Torrent deleted'})
+        else:
+            return jsonify({'error': 'Failed to delete torrent'}), 500
+    except Exception as e:
+        logger.error(f"Error deleting torrent: {e}", exc_info=True)
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@app.route('/api/torrents/<torrent_hash>/files', methods=['GET'])
+def get_torrent_files(torrent_hash):
+    """Get list of files in a torrent."""
+    user_id = require_auth()
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        qb_client = QBittorrentClient()
+        files = qb_client.get_torrent_files(torrent_hash)
+        
+        if files is None:
+            return jsonify({'error': 'Failed to get torrent files'}), 500
+        
+        # Format files for frontend
+        formatted_files = []
+        for file in files:
+            formatted_file = {
+                'id': file.get('index', 0),
+                'name': file.get('name', 'Unknown'),
+                'size': file.get('size', 0),
+                'progress': round(file.get('progress', 0) * 100, 1),
+                'priority': file.get('priority', 0),
+                'is_seed': file.get('is_seed', False),
+            }
+            formatted_files.append(formatted_file)
+        
+        return jsonify({'files': formatted_files})
+    except Exception as e:
+        logger.error(f"Error getting torrent files: {e}", exc_info=True)
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@app.route('/api/torrents/<torrent_hash>/files/priority', methods=['POST'])
+def set_file_priority(torrent_hash):
+    """Set priority for files in a torrent."""
+    user_id = require_auth()
+    if not user_id:
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        file_ids = data.get('file_ids', [])
+        priority = data.get('priority', 1)
+        
+        if not file_ids:
+            return jsonify({'error': 'No file IDs provided'}), 400
+        
+        qb_client = QBittorrentClient()
+        success = qb_client.set_file_priority(torrent_hash, file_ids, priority)
+        
+        if success:
+            return jsonify({'success': True, 'message': 'File priority updated'})
+        else:
+            return jsonify({'error': 'Failed to set file priority'}), 500
+    except Exception as e:
+        logger.error(f"Error setting file priority: {e}", exc_info=True)
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 def create_app():

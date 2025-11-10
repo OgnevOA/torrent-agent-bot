@@ -125,6 +125,127 @@ class QBittorrentClient:
             logger.error(f"Failed to get active torrents: {e}")
             return None
     
+    def pause_torrent(self, torrent_hash: str) -> bool:
+        """
+        Pause/stop a torrent.
+        
+        Args:
+            torrent_hash: Hash of the torrent to pause
+            
+        Returns:
+            True if paused successfully, False otherwise
+        """
+        if not self._authenticated:
+            if not self.connect():
+                return False
+        
+        try:
+            self.client.torrents_pause(torrent_hashes=torrent_hash)
+            logger.info(f"Successfully paused torrent: {torrent_hash[:8]}...")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to pause torrent: {e}")
+            return False
+    
+    def resume_torrent(self, torrent_hash: str) -> bool:
+        """
+        Resume a paused torrent.
+        
+        Args:
+            torrent_hash: Hash of the torrent to resume
+            
+        Returns:
+            True if resumed successfully, False otherwise
+        """
+        if not self._authenticated:
+            if not self.connect():
+                return False
+        
+        try:
+            self.client.torrents_resume(torrent_hashes=torrent_hash)
+            logger.info(f"Successfully resumed torrent: {torrent_hash[:8]}...")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to resume torrent: {e}")
+            return False
+    
+    def delete_torrent(self, torrent_hash: str, delete_files: bool = False) -> bool:
+        """
+        Delete a torrent.
+        
+        Args:
+            torrent_hash: Hash of the torrent to delete
+            delete_files: If True, also delete downloaded files
+            
+        Returns:
+            True if deleted successfully, False otherwise
+        """
+        if not self._authenticated:
+            if not self.connect():
+                return False
+        
+        try:
+            self.client.torrents_delete(
+                torrent_hashes=torrent_hash,
+                delete_files=delete_files
+            )
+            logger.info(f"Successfully deleted torrent: {torrent_hash[:8]}...")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete torrent: {e}")
+            return False
+    
+    def get_torrent_files(self, torrent_hash: str) -> Optional[List[dict]]:
+        """
+        Get list of files in a torrent.
+        
+        Args:
+            torrent_hash: Hash of the torrent
+            
+        Returns:
+            List of file dictionaries or None if error
+        """
+        if not self._authenticated:
+            if not self.connect():
+                return None
+        
+        try:
+            files = self.client.torrents_files(torrent_hash=torrent_hash)
+            return [dict(f) for f in files]
+        except Exception as e:
+            logger.error(f"Failed to get torrent files: {e}")
+            return None
+    
+    def set_file_priority(self, torrent_hash: str, file_ids: List[int], priority: int) -> bool:
+        """
+        Set priority for files in a torrent.
+        
+        Args:
+            torrent_hash: Hash of the torrent
+            file_ids: List of file IDs (indices) to set priority for
+            priority: Priority level (0=Do not download, 1=Normal, 6=High, 7=Maximum)
+            
+        Returns:
+            True if priority set successfully, False otherwise
+        """
+        if not self._authenticated:
+            if not self.connect():
+                return False
+        
+        try:
+            # Convert file_ids to strings as qBittorrent API expects
+            file_ids_str = [str(fid) for fid in file_ids]
+            self.client.torrents_file_priority(
+                torrent_hash=torrent_hash,
+                file_ids=file_ids_str,
+                priority=priority
+            )
+            logger.info(f"Successfully set file priority for torrent: {torrent_hash[:8]}...")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to set file priority: {e}")
+            return False
+    
     def disconnect(self):
         """Disconnect from qBittorrent API."""
         try:

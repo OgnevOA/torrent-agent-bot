@@ -51,13 +51,17 @@ function getStatusInfo(state) {
     return { emoji: '⚪', class: 'paused' };
 }
 
+// Global state
+let currentTorrentHash = null;
+let currentTorrentFiles = [];
+
 // Render torrent card
 function renderTorrent(torrent) {
     const statusInfo = getStatusInfo(torrent.state);
     const progress = Math.min(100, Math.max(0, torrent.progress));
     
     return `
-        <div class="torrent-card">
+        <div class="torrent-card" data-hash="${escapeHtml(torrent.hash)}" onclick="showContextMenu(event, '${escapeHtml(torrent.hash)}', '${escapeHtml(torrent.state)}')">
             <div class="torrent-header">
                 <div class="torrent-name">${escapeHtml(torrent.name)}</div>
                 <div class="torrent-status ${statusInfo.class}">
@@ -288,5 +292,264 @@ document.addEventListener('DOMContentLoaded', () => {
 window.addEventListener('beforeunload', () => {
     if (socket) {
         socket.disconnect();
+    }
+});
+
+// Context Menu Functions
+function showContextMenu(event, hash, state) {
+    event.stopPropagation();
+    const menu = document.getElementById('contextMenu');
+    const pauseItem = menu.querySelector('[data-action="pause"]');
+    const resumeItem = menu.querySelector('[data-action="resume"]');
+    
+    // Show/hide pause/resume based on state
+    // Pause is available for active states (downloading, uploading, seeding, etc.)
+    // Resume is available for paused states
+    const isPaused = ['paused', 'queueddl', 'stalleddl'].includes(state.toLowerCase());
+    const canPause = !isPaused && ['downloading', 'uploading', 'seeding', 'stalledup', 'queuedup'].includes(state.toLowerCase());
+    
+    pauseItem.style.display = canPause ? 'flex' : 'none';
+    resumeItem.style.display = isPaused ? 'flex' : 'none';
+    
+    // Position menu
+    menu.style.display = 'block';
+    menu.style.left = `${Math.min(event.clientX, window.innerWidth - 200)}px`;
+    menu.style.top = `${Math.min(event.clientY, window.innerHeight - 200)}px`;
+    
+    currentTorrentHash = hash;
+}
+
+// Hide context menu when clicking outside
+document.addEventListener('click', (e) => {
+    const menu = document.getElementById('contextMenu');
+    if (menu && !menu.contains(e.target)) {
+        menu.style.display = 'none';
+    }
+});
+
+// Context menu actions
+document.getElementById('contextMenu').addEventListener('click', (e) => {
+    const action = e.target.closest('.context-menu-item')?.dataset.action;
+    if (!action || !currentTorrentHash) return;
+    
+    document.getElementById('contextMenu').style.display = 'none';
+    
+    switch (action) {
+        case 'pause':
+            pauseTorrent(currentTorrentHash);
+            break;
+        case 'resume':
+            resumeTorrent(currentTorrentHash);
+            break;
+        case 'files':
+            showFileModal(currentTorrentHash);
+            break;
+        case 'delete':
+            showDeleteModal(currentTorrentHash);
+            break;
+    }
+});
+
+// API Functions
+function getAuthHeader() {
+    const initData = tg.initData || tg.initDataUnsafe || '';
+    return {
+        'X-Telegram-Init-Data': initData,
+        'Content-Type': 'application/json'
+    };
+}
+
+async function pauseTorrent(hash) {
+    try {
+        const response = await fetch(`/api/torrents/${hash}/pause`, {
+            method: 'POST',
+            headers: getAuthHeader()
+        });
+        const data = await response.json();
+        if (data.success) {
+            tg.showPopup({ title: 'Success', message: 'Torrent paused' });
+        } else {
+            tg.showPopup({ title: 'Error', message: data.error || 'Failed to pause torrent' });
+        }
+    } catch (error) {
+        tg.showPopup({ title: 'Error', message: 'Failed to pause torrent' });
+    }
+}
+
+async function resumeTorrent(hash) {
+    try {
+        const response = await fetch(`/api/torrents/${hash}/resume`, {
+            method: 'POST',
+            headers: getAuthHeader()
+        });
+        const data = await response.json();
+        if (data.success) {
+            tg.showPopup({ title: 'Success', message: 'Torrent resumed' });
+        } else {
+            tg.showPopup({ title: 'Error', message: data.error || 'Failed to resume torrent' });
+        }
+    } catch (error) {
+        tg.showPopup({ title: 'Error', message: 'Failed to resume torrent' });
+    }
+}
+
+async function showFileModal(hash) {
+    const modal = document.getElementById('fileModal');
+    const fileList = document.getElementById('fileList');
+    const title = document.getElementById('fileModalTitle');
+    
+    modal.style.display = 'flex';
+    fileList.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading files...</p></div>';
+    
+    try {
+        const initData = tg.initData || tg.initDataUnsafe || '';
+        const response = await fetch(`/api/torrents/${hash}/files?_auth=${encodeURIComponent(initData)}`);
+        const data = await response.json();
+        
+        if (data.files) {
+            currentTorrentFiles = data.files;
+            currentTorrentHash = hash;
+            
+            // Get torrent name for title
+            const torrents = Array.from(document.querySelectorAll('.torrent-card'));
+            const torrentCard = torrents.find(card => card.dataset.hash === hash);
+            const torrentName = torrentCard?.querySelector('.torrent-name')?.textContent || 'Torrent';
+            title.textContent = `Files: ${torrentName.substring(0, 40)}${torrentName.length > 40 ? '...' : ''}`;
+            
+            renderFileList(data.files);
+        } else {
+            fileList.innerHTML = `<div class="error">❌ ${data.error || 'Failed to load files'}</div>`;
+        }
+    } catch (error) {
+        fileList.innerHTML = '<div class="error">❌ Failed to load files</div>';
+    }
+}
+
+function closeFileModal() {
+    document.getElementById('fileModal').style.display = 'none';
+    currentTorrentFiles = [];
+}
+
+function renderFileList(files) {
+    const fileList = document.getElementById('fileList');
+    
+    if (files.length === 0) {
+        fileList.innerHTML = '<div class="empty-state">No files found</div>';
+        return;
+    }
+    
+    fileList.innerHTML = files.map(file => {
+        const priorityOptions = [
+            { value: 0, label: 'Do not download' },
+            { value: 1, label: 'Normal' },
+            { value: 6, label: 'High' },
+            { value: 7, label: 'Maximum' }
+        ];
+        
+        const optionsHtml = priorityOptions.map(opt => 
+            `<option value="${opt.value}" ${file.priority === opt.value ? 'selected' : ''}>${opt.label}</option>`
+        ).join('');
+        
+        return `
+            <div class="file-item">
+                <div class="file-header">
+                    <div class="file-name">${escapeHtml(file.name)}</div>
+                    <div class="file-size">${formatBytes(file.size)}</div>
+                </div>
+                <div class="file-progress">Progress: ${file.progress.toFixed(1)}%</div>
+                <div class="file-controls">
+                    <label>Priority:</label>
+                    <select class="priority-select" data-file-id="${file.id}" onchange="setFilePriority(${file.id}, this.value)">
+                        ${optionsHtml}
+                    </select>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function setFilePriority(fileId, priority) {
+    if (!currentTorrentHash) return;
+    
+    try {
+        const initData = tg.initData || tg.initDataUnsafe || '';
+        const response = await fetch(`/api/torrents/${currentTorrentHash}/files/priority`, {
+            method: 'POST',
+            headers: {
+                'X-Telegram-Init-Data': initData,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                file_ids: [fileId],
+                priority: parseInt(priority)
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            // Update local state
+            const file = currentTorrentFiles.find(f => f.id === fileId);
+            if (file) {
+                file.priority = parseInt(priority);
+            }
+        } else {
+            tg.showPopup({ title: 'Error', message: data.error || 'Failed to set priority' });
+            // Reload files to reset UI
+            showFileModal(currentTorrentHash);
+        }
+    } catch (error) {
+        tg.showPopup({ title: 'Error', message: 'Failed to set file priority' });
+    }
+}
+
+function showDeleteModal(hash) {
+    currentTorrentHash = hash;
+    document.getElementById('deleteModal').style.display = 'flex';
+    document.getElementById('deleteFiles').checked = false;
+}
+
+function closeDeleteModal() {
+    document.getElementById('deleteModal').style.display = 'none';
+    currentTorrentHash = null;
+}
+
+async function confirmDelete() {
+    if (!currentTorrentHash) return;
+    
+    const deleteFiles = document.getElementById('deleteFiles').checked;
+    
+    try {
+        const initData = tg.initData || tg.initDataUnsafe || '';
+        const response = await fetch(`/api/torrents/${currentTorrentHash}/delete`, {
+            method: 'POST',
+            headers: {
+                'X-Telegram-Init-Data': initData,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ delete_files: deleteFiles })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            tg.showPopup({ title: 'Success', message: 'Torrent deleted' });
+            closeDeleteModal();
+        } else {
+            tg.showPopup({ title: 'Error', message: data.error || 'Failed to delete torrent' });
+        }
+    } catch (error) {
+        tg.showPopup({ title: 'Error', message: 'Failed to delete torrent' });
+    }
+}
+
+// Close modals when clicking overlay
+document.getElementById('fileModal').addEventListener('click', (e) => {
+    if (e.target.id === 'fileModal') {
+        closeFileModal();
+    }
+});
+
+document.getElementById('deleteModal').addEventListener('click', (e) => {
+    if (e.target.id === 'deleteModal') {
+        closeDeleteModal();
     }
 });

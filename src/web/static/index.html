@@ -46,6 +46,66 @@
         </div>
     </div>
     
+    <!-- Context Menu -->
+    <div class="context-menu" id="contextMenu" style="display: none;">
+        <div class="context-menu-item" data-action="pause">
+            <span class="context-menu-icon">⏸️</span>
+            <span>Pause</span>
+        </div>
+        <div class="context-menu-item" data-action="resume">
+            <span class="context-menu-icon">▶️</span>
+            <span>Resume</span>
+        </div>
+        <div class="context-menu-item" data-action="files">
+            <span class="context-menu-icon">📁</span>
+            <span>View Files</span>
+        </div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item danger" data-action="delete">
+            <span class="context-menu-icon">🗑️</span>
+            <span>Delete</span>
+        </div>
+    </div>
+    
+    <!-- File List Modal -->
+    <div class="modal-overlay" id="fileModal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="fileModalTitle">Torrent Files</h2>
+                <button class="modal-close" onclick="closeFileModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="file-list" id="fileList">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading files...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-overlay" id="deleteModal" style="display: none;">
+        <div class="modal-content small">
+            <div class="modal-header">
+                <h2>Delete Torrent</h2>
+                <button class="modal-close" onclick="closeDeleteModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this torrent?</p>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="deleteFiles">
+                    <span>Also delete downloaded files</span>
+                </label>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+            </div>
+        </div>
+    </div>
+    
     <script src="app.js"></script>
 </body>
 </html>
