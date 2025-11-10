@@ -3,6 +3,11 @@ const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
 
+// WebSocket connection
+let socket = null;
+let reconnectAttempts = 0;
+const maxReconnectAttempts = 5;
+
 // Format bytes to human-readable format
 function formatBytes(bytes) {
     if (bytes === 0) return '0 B';
@@ -118,8 +123,24 @@ function updateStats(torrents) {
     document.getElementById('seedingCount').textContent = seeding;
 }
 
-// Load torrents from API
-async function loadTorrents() {
+// Update connection status indicator
+function updateConnectionStatus(status, connected) {
+    const statusEl = document.getElementById('connectionStatus');
+    const dotEl = document.getElementById('connectionDot');
+    
+    statusEl.textContent = status;
+    
+    if (connected) {
+        dotEl.style.background = 'var(--accent-green)';
+        dotEl.style.animation = 'pulse 2s ease-in-out infinite';
+    } else {
+        dotEl.style.background = 'var(--accent-orange)';
+        dotEl.style.animation = 'none';
+    }
+}
+
+// Update torrents list smoothly
+function updateTorrentsList(torrents) {
     const loadingEl = document.getElementById('loading');
     const errorEl = document.getElementById('error');
     const torrentsListEl = document.getElementById('torrentsList');
@@ -127,102 +148,145 @@ async function loadTorrents() {
     // Save scroll position before update
     const scrollPosition = window.scrollY || document.documentElement.scrollTop;
     
-    // Don't show loading spinner on auto-refresh (only on initial load)
-    const isInitialLoad = loadingEl.style.display === 'flex' || torrentsListEl.innerHTML === '';
+    loadingEl.style.display = 'none';
+    errorEl.style.display = 'none';
     
-    if (isInitialLoad) {
+    if (torrents.length === 0) {
+        torrentsListEl.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">📭</div>
+                <div class="empty-state-text">No torrents found</div>
+                <div class="empty-state-subtext">Add some torrents to see them here</div>
+            </div>
+        `;
+    } else {
+        torrentsListEl.innerHTML = torrents.map(renderTorrent).join('');
+        updateStats(torrents);
+    }
+    
+    // Restore scroll position after DOM update
+    requestAnimationFrame(() => {
+        window.scrollTo(0, scrollPosition);
+    });
+}
+
+// Connect WebSocket
+function connectWebSocket() {
+    const loadingEl = document.getElementById('loading');
+    const errorEl = document.getElementById('error');
+    
+    // Show loading on initial connect
+    if (!socket || !socket.connected) {
         loadingEl.style.display = 'flex';
         errorEl.style.display = 'none';
-        torrentsListEl.innerHTML = '';
     }
     
-    try {
-        // Get initData from Telegram Web App
-        const initData = tg.initData || tg.initDataUnsafe || '';
-        
-        // Build API URL with auth
-        const apiUrl = '/api/torrents';
-        const headers = {
-            'X-Telegram-Init-Data': initData
-        };
-        
-        const response = await fetch(apiUrl, { headers });
-        
-        if (!response.ok) {
-            if (response.status === 403) {
-                throw new Error('Unauthorized. Please use this app through Telegram.');
-            }
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        
-        const torrents = data.torrents || [];
-        
-        loadingEl.style.display = 'none';
-        
-        if (torrents.length === 0) {
-            torrentsListEl.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">📭</div>
-                    <div class="empty-state-text">No torrents found</div>
-                    <div class="empty-state-subtext">Add some torrents to see them here</div>
-                </div>
-            `;
-        } else {
-            torrentsListEl.innerHTML = torrents.map(renderTorrent).join('');
-            updateStats(torrents);
-        }
-        
-        // Restore scroll position after DOM update
-        // Use requestAnimationFrame to ensure DOM is fully updated
-        requestAnimationFrame(() => {
-            window.scrollTo(0, scrollPosition);
-        });
-        
-    } catch (error) {
-        console.error('Error loading torrents:', error);
+    updateConnectionStatus('Connecting...', false);
+    
+    // Get initData from Telegram Web App
+    const initData = tg.initData || tg.initDataUnsafe || '';
+    
+    if (!initData) {
+        updateConnectionStatus('No auth data', false);
         loadingEl.style.display = 'none';
         errorEl.style.display = 'block';
-        errorEl.querySelector('p').textContent = `❌ ${error.message}`;
+        errorEl.querySelector('p').textContent = '❌ No authentication data available';
+        return;
     }
-}
-
-// Auto-refresh every 5 seconds
-let refreshInterval;
-
-function startAutoRefresh() {
-    refreshInterval = setInterval(loadTorrents, 5000);
-}
-
-function stopAutoRefresh() {
-    if (refreshInterval) {
-        clearInterval(refreshInterval);
+    
+    // Disconnect existing socket if any
+    if (socket) {
+        socket.disconnect();
     }
+    
+    // Connect to WebSocket server
+    socket = io({
+        auth: {
+            initData: initData
+        },
+        query: {
+            initData: initData
+        },
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: maxReconnectAttempts
+    });
+    
+    // Connection successful
+    socket.on('connect', () => {
+        console.log('WebSocket connected');
+        reconnectAttempts = 0;
+        updateConnectionStatus('Connected', true);
+        loadingEl.style.display = 'none';
+        errorEl.style.display = 'none';
+    });
+    
+    // Receive torrent updates
+    socket.on('torrents_update', (data) => {
+        const torrents = data.torrents || [];
+        updateTorrentsList(torrents);
+    });
+    
+    // Connection error
+    socket.on('connect_error', (error) => {
+        console.error('WebSocket connection error:', error);
+        reconnectAttempts++;
+        
+        if (reconnectAttempts >= maxReconnectAttempts) {
+            updateConnectionStatus('Connection failed', false);
+            loadingEl.style.display = 'none';
+            errorEl.style.display = 'block';
+            errorEl.querySelector('p').textContent = '❌ Failed to connect. Please check your connection.';
+        } else {
+            updateConnectionStatus(`Reconnecting (${reconnectAttempts}/${maxReconnectAttempts})...`, false);
+        }
+    });
+    
+    // Disconnected
+    socket.on('disconnect', (reason) => {
+        console.log('WebSocket disconnected:', reason);
+        updateConnectionStatus('Disconnected', false);
+        
+        if (reason === 'io server disconnect') {
+            // Server disconnected, don't reconnect automatically
+            loadingEl.style.display = 'none';
+            errorEl.style.display = 'block';
+            errorEl.querySelector('p').textContent = '❌ Server disconnected. Please refresh.';
+        }
+    });
+    
+    // Reconnecting
+    socket.on('reconnect_attempt', (attemptNumber) => {
+        console.log('Reconnection attempt:', attemptNumber);
+        updateConnectionStatus(`Reconnecting (${attemptNumber}/${maxReconnectAttempts})...`, false);
+    });
+    
+    // Reconnected
+    socket.on('reconnect', (attemptNumber) => {
+        console.log('Reconnected after', attemptNumber, 'attempts');
+        reconnectAttempts = 0;
+        updateConnectionStatus('Connected', true);
+        errorEl.style.display = 'none';
+    });
 }
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
-    loadTorrents();
-    startAutoRefresh();
+    connectWebSocket();
     
-    // Stop auto-refresh when page is hidden, resume when visible
+    // Reconnect when page becomes visible
     document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-            stopAutoRefresh();
-        } else {
-            startAutoRefresh();
-            loadTorrents(); // Refresh immediately when visible
+        if (!document.hidden && (!socket || !socket.connected)) {
+            connectWebSocket();
         }
     });
 });
 
 // Handle page unload
 window.addEventListener('beforeunload', () => {
-    stopAutoRefresh();
+    if (socket) {
+        socket.disconnect();
+    }
 });
-
