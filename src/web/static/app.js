@@ -61,7 +61,7 @@ function renderTorrent(torrent) {
     const progress = Math.min(100, Math.max(0, torrent.progress));
     
     return `
-        <div class="torrent-card" data-hash="${escapeHtml(torrent.hash)}" onclick="showContextMenu(event, '${escapeHtml(torrent.hash)}', '${escapeHtml(torrent.state)}')">
+        <div class="torrent-card" data-hash="${escapeHtml(torrent.hash)}" ontouchstart="showContextMenu(event, '${escapeHtml(torrent.hash)}', '${escapeHtml(torrent.state)}')" onclick="showContextMenu(event, '${escapeHtml(torrent.hash)}', '${escapeHtml(torrent.state)}')">
             <div class="torrent-header">
                 <div class="torrent-name">${escapeHtml(torrent.name)}</div>
                 <div class="torrent-status ${statusInfo.class}">
@@ -278,6 +278,7 @@ function connectWebSocket() {
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
+    initContextMenu();
     connectWebSocket();
     
     // Reconnect when page becomes visible
@@ -297,10 +298,22 @@ window.addEventListener('beforeunload', () => {
 
 // Context Menu Functions
 function showContextMenu(event, hash, state) {
+    event.preventDefault();
     event.stopPropagation();
+    
     const menu = document.getElementById('contextMenu');
+    if (!menu) {
+        console.error('Context menu not found in DOM');
+        return;
+    }
+    
     const pauseItem = menu.querySelector('[data-action="pause"]');
     const resumeItem = menu.querySelector('[data-action="resume"]');
+    
+    if (!pauseItem || !resumeItem) {
+        console.error('Context menu items not found');
+        return;
+    }
     
     // Show/hide pause/resume based on state
     // Pause is available for active states (downloading, uploading, seeding, etc.)
@@ -311,44 +324,99 @@ function showContextMenu(event, hash, state) {
     pauseItem.style.display = canPause ? 'flex' : 'none';
     resumeItem.style.display = isPaused ? 'flex' : 'none';
     
-    // Position menu
-    menu.style.display = 'block';
-    menu.style.left = `${Math.min(event.clientX, window.innerWidth - 200)}px`;
-    menu.style.top = `${Math.min(event.clientY, window.innerHeight - 200)}px`;
-    
     currentTorrentHash = hash;
+    
+    // Position menu relative to the clicked element
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = 180;
+    const menuHeight = 200;
+    
+    let left = rect.left + (rect.width / 2) - (menuWidth / 2);
+    let top = rect.bottom + 5;
+    
+    // Adjust if menu goes off screen
+    if (left + menuWidth > window.innerWidth) {
+        left = window.innerWidth - menuWidth - 10;
+    }
+    if (left < 10) {
+        left = 10;
+    }
+    
+    if (top + menuHeight > window.innerHeight) {
+        top = rect.top - menuHeight - 5;
+    }
+    if (top < 10) {
+        top = 10;
+    }
+    
+    // Force display and positioning
+    menu.style.display = 'block';
+    menu.style.visibility = 'visible';
+    menu.style.opacity = '1';
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+    menu.style.zIndex = '10000';
+    menu.style.pointerEvents = 'auto';
+    
+    // Bring to front
+    menu.style.position = 'fixed';
 }
 
 // Hide context menu when clicking outside
 document.addEventListener('click', (e) => {
     const menu = document.getElementById('contextMenu');
-    if (menu && !menu.contains(e.target)) {
-        menu.style.display = 'none';
+    if (menu && menu.style.display === 'block' && !menu.contains(e.target)) {
+        // Check if click is not on a torrent card
+        if (!e.target.closest('.torrent-card')) {
+            menu.style.display = 'none';
+        }
     }
 });
 
-// Context menu actions
-document.getElementById('contextMenu').addEventListener('click', (e) => {
-    const action = e.target.closest('.context-menu-item')?.dataset.action;
-    if (!action || !currentTorrentHash) return;
-    
-    document.getElementById('contextMenu').style.display = 'none';
-    
-    switch (action) {
-        case 'pause':
-            pauseTorrent(currentTorrentHash);
-            break;
-        case 'resume':
-            resumeTorrent(currentTorrentHash);
-            break;
-        case 'files':
-            showFileModal(currentTorrentHash);
-            break;
-        case 'delete':
-            showDeleteModal(currentTorrentHash);
-            break;
+// Also hide on scroll
+document.addEventListener('scroll', () => {
+    const menu = document.getElementById('contextMenu');
+    if (menu) {
+        menu.style.display = 'none';
     }
-});
+}, true);
+
+// Context menu actions - wait for DOM to be ready
+let contextMenuInitialized = false;
+function initContextMenu() {
+    if (contextMenuInitialized) return;
+    
+    const menu = document.getElementById('contextMenu');
+    if (!menu) {
+        console.error('Context menu element not found');
+        return;
+    }
+    
+    menu.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const action = e.target.closest('.context-menu-item')?.dataset.action;
+        if (!action || !currentTorrentHash) return;
+        
+        menu.style.display = 'none';
+        
+        switch (action) {
+            case 'pause':
+                pauseTorrent(currentTorrentHash);
+                break;
+            case 'resume':
+                resumeTorrent(currentTorrentHash);
+                break;
+            case 'files':
+                showFileModal(currentTorrentHash);
+                break;
+            case 'delete':
+                showDeleteModal(currentTorrentHash);
+                break;
+        }
+    });
+    
+    contextMenuInitialized = true;
+}
 
 // API Functions
 function getAuthHeader() {
@@ -367,12 +435,24 @@ async function pauseTorrent(hash) {
         });
         const data = await response.json();
         if (data.success) {
-            tg.showPopup({ title: 'Success', message: 'Torrent paused' });
+            tg.showPopup({ 
+                title: 'Success', 
+                message: 'Torrent paused',
+                buttons: [{ type: 'ok' }]
+            });
         } else {
-            tg.showPopup({ title: 'Error', message: data.error || 'Failed to pause torrent' });
+            tg.showPopup({ 
+                title: 'Error', 
+                message: data.error || 'Failed to pause torrent',
+                buttons: [{ type: 'ok' }]
+            });
         }
     } catch (error) {
-        tg.showPopup({ title: 'Error', message: 'Failed to pause torrent' });
+        tg.showPopup({ 
+            title: 'Error', 
+            message: 'Failed to pause torrent',
+            buttons: [{ type: 'ok' }]
+        });
     }
 }
 
@@ -384,12 +464,24 @@ async function resumeTorrent(hash) {
         });
         const data = await response.json();
         if (data.success) {
-            tg.showPopup({ title: 'Success', message: 'Torrent resumed' });
+            tg.showPopup({ 
+                title: 'Success', 
+                message: 'Torrent resumed',
+                buttons: [{ type: 'ok' }]
+            });
         } else {
-            tg.showPopup({ title: 'Error', message: data.error || 'Failed to resume torrent' });
+            tg.showPopup({ 
+                title: 'Error', 
+                message: data.error || 'Failed to resume torrent',
+                buttons: [{ type: 'ok' }]
+            });
         }
     } catch (error) {
-        tg.showPopup({ title: 'Error', message: 'Failed to resume torrent' });
+        tg.showPopup({ 
+            title: 'Error', 
+            message: 'Failed to resume torrent',
+            buttons: [{ type: 'ok' }]
+        });
     }
 }
 
@@ -493,12 +585,20 @@ async function setFilePriority(fileId, priority) {
                 file.priority = parseInt(priority);
             }
         } else {
-            tg.showPopup({ title: 'Error', message: data.error || 'Failed to set priority' });
+            tg.showPopup({ 
+                title: 'Error', 
+                message: data.error || 'Failed to set priority',
+                buttons: [{ type: 'ok' }]
+            });
             // Reload files to reset UI
             showFileModal(currentTorrentHash);
         }
     } catch (error) {
-        tg.showPopup({ title: 'Error', message: 'Failed to set file priority' });
+        tg.showPopup({ 
+            title: 'Error', 
+            message: 'Failed to set file priority',
+            buttons: [{ type: 'ok' }]
+        });
     }
 }
 
@@ -531,13 +631,25 @@ async function confirmDelete() {
         
         const data = await response.json();
         if (data.success) {
-            tg.showPopup({ title: 'Success', message: 'Torrent deleted' });
+            tg.showPopup({ 
+                title: 'Success', 
+                message: 'Torrent deleted',
+                buttons: [{ type: 'ok' }]
+            });
             closeDeleteModal();
         } else {
-            tg.showPopup({ title: 'Error', message: data.error || 'Failed to delete torrent' });
+            tg.showPopup({ 
+                title: 'Error', 
+                message: data.error || 'Failed to delete torrent',
+                buttons: [{ type: 'ok' }]
+            });
         }
     } catch (error) {
-        tg.showPopup({ title: 'Error', message: 'Failed to delete torrent' });
+        tg.showPopup({ 
+            title: 'Error', 
+            message: 'Failed to delete torrent',
+            buttons: [{ type: 'ok' }]
+        });
     }
 }
 
