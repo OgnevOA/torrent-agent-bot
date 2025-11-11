@@ -55,13 +55,21 @@ function getStatusInfo(state) {
 let currentTorrentHash = null;
 let currentTorrentFiles = [];
 
+// Touch event tracking for scroll detection
+let touchStartX = 0;
+let touchStartY = 0;
+let touchStartTime = 0;
+let isScrolling = false;
+let touchTargetHash = null;
+let touchTargetState = null;
+
 // Render torrent card
 function renderTorrent(torrent) {
     const statusInfo = getStatusInfo(torrent.state);
     const progress = Math.min(100, Math.max(0, torrent.progress));
     
     return `
-        <div class="torrent-card" data-hash="${escapeHtml(torrent.hash)}" ontouchstart="showContextMenu(event, '${escapeHtml(torrent.hash)}', '${escapeHtml(torrent.state)}')" onclick="showContextMenu(event, '${escapeHtml(torrent.hash)}', '${escapeHtml(torrent.state)}')">
+        <div class="torrent-card" data-hash="${escapeHtml(torrent.hash)}" ontouchstart="handleTorrentTouchStart(event, '${escapeHtml(torrent.hash)}', '${escapeHtml(torrent.state)}')" ontouchend="handleTorrentTouchEnd(event)" onclick="handleTorrentClick(event, '${escapeHtml(torrent.hash)}', '${escapeHtml(torrent.state)}')">
             <div class="torrent-header">
                 <div class="torrent-name">${escapeHtml(torrent.name)}</div>
                 <div class="torrent-status ${statusInfo.class}">
@@ -296,6 +304,71 @@ window.addEventListener('beforeunload', () => {
     }
 });
 
+// Touch event handlers for mobile devices
+function handleTorrentTouchStart(event, hash, state) {
+    const touch = event.touches[0];
+    touchStartX = touch.clientX;
+    touchStartY = touch.clientY;
+    touchStartTime = Date.now();
+    isScrolling = false;
+    touchTargetHash = hash;
+    touchTargetState = state;
+}
+
+function handleTorrentTouchEnd(event) {
+    // Only process if we have a valid touch target
+    if (!touchTargetHash || !touchTargetState) {
+        return;
+    }
+    
+    const touch = event.changedTouches[0];
+    const touchEndX = touch.clientX;
+    const touchEndY = touch.clientY;
+    const touchDuration = Date.now() - touchStartTime;
+    
+    // Calculate movement distance
+    const deltaX = Math.abs(touchEndX - touchStartX);
+    const deltaY = Math.abs(touchEndY - touchStartY);
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    
+    // Only show menu if:
+    // 1. Touch was quick (< 300ms) - indicates a tap, not a long press
+    // 2. Movement was small (< 15px) - indicates a tap, not a scroll
+    // 3. Not currently scrolling
+    if (touchDuration < 300 && distance < 15 && !isScrolling) {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        // Create a synthetic event object for showContextMenu
+        const syntheticEvent = {
+            currentTarget: event.target.closest('.torrent-card'),
+            preventDefault: () => {},
+            stopPropagation: () => {}
+        };
+        
+        showContextMenu(syntheticEvent, touchTargetHash, touchTargetState);
+    }
+    
+    // Reset touch tracking
+    touchTargetHash = null;
+    touchTargetState = null;
+}
+
+// Click handler for desktop
+function handleTorrentClick(event, hash, state) {
+    // On mobile, ignore click events that were triggered by touch
+    // (browsers fire both touch and click events on mobile)
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+        const timeSinceTouch = Date.now() - touchStartTime;
+        // If a touch event happened recently (< 500ms), ignore this click
+        if (timeSinceTouch < 500) {
+            return;
+        }
+    }
+    
+    showContextMenu(event, hash, state);
+}
+
 // Context Menu Functions
 function showContextMenu(event, hash, state) {
     event.preventDefault();
@@ -326,8 +399,15 @@ function showContextMenu(event, hash, state) {
     
     currentTorrentHash = hash;
     
+    // Get the target element
+    const targetElement = event.currentTarget || event.target.closest('.torrent-card');
+    if (!targetElement) {
+        console.error('Could not find target element');
+        return;
+    }
+    
     // Position menu relative to the clicked element
-    const rect = event.currentTarget.getBoundingClientRect();
+    const rect = targetElement.getBoundingClientRect();
     const menuWidth = 180;
     const menuHeight = 200;
     
@@ -379,7 +459,27 @@ document.addEventListener('scroll', () => {
     if (menu) {
         menu.style.display = 'none';
     }
+    // Mark as scrolling to prevent menu from appearing
+    isScrolling = true;
 }, true);
+
+// Detect touchmove to mark scrolling (prevents menu from appearing during scroll)
+document.addEventListener('touchmove', (e) => {
+    // Check if touch moved significantly
+    if (e.touches && e.touches.length > 0) {
+        const touch = e.touches[0];
+        const deltaX = Math.abs(touch.clientX - touchStartX);
+        const deltaY = Math.abs(touch.clientY - touchStartY);
+        
+        // If moved more than 10px, it's definitely a scroll
+        if (deltaX > 10 || deltaY > 10) {
+            isScrolling = true;
+            // Clear touch target to prevent menu from showing
+            touchTargetHash = null;
+            touchTargetState = null;
+        }
+    }
+}, { passive: true });
 
 // Context menu actions - wait for DOM to be ready
 let contextMenuInitialized = false;
