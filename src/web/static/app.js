@@ -151,35 +151,182 @@ function updateConnectionStatus(status, connected) {
     }
 }
 
+// Update individual torrent card in place
+function updateTorrentCard(cardElement, torrent) {
+    const statusInfo = getStatusInfo(torrent.state);
+    const progress = Math.min(100, Math.max(0, torrent.progress));
+    
+    // Update torrent name if changed
+    const nameEl = cardElement.querySelector('.torrent-name');
+    if (nameEl && nameEl.textContent !== torrent.name) {
+        nameEl.textContent = torrent.name;
+    }
+    
+    // Update status
+    const statusEl = cardElement.querySelector('.torrent-status');
+    if (statusEl) {
+        const newStatusHtml = `${statusInfo.emoji} ${torrent.state}`;
+        if (statusEl.innerHTML !== newStatusHtml) {
+            statusEl.innerHTML = newStatusHtml;
+            statusEl.className = `torrent-status ${statusInfo.class}`;
+        }
+    }
+    
+    // Update progress bar
+    const progressBar = cardElement.querySelector('.progress-bar');
+    if (progressBar) {
+        const newWidth = `${progress}%`;
+        if (progressBar.style.width !== newWidth) {
+            progressBar.style.width = newWidth;
+        }
+    }
+    
+    // Update progress text
+    const progressText = cardElement.querySelector('.progress-text');
+    if (progressText) {
+        const progressSpans = progressText.querySelectorAll('span');
+        if (progressSpans.length >= 2) {
+            const progressPercent = progressSpans[0];
+            const sizeSpan = progressSpans[1];
+            
+            const newProgress = `${progress.toFixed(1)}%`;
+            const newSize = formatBytes(torrent.size);
+            
+            if (progressPercent.textContent !== newProgress) {
+                progressPercent.textContent = newProgress;
+            }
+            if (sizeSpan.textContent !== newSize) {
+                sizeSpan.textContent = newSize;
+            }
+        }
+    }
+    
+    // Update info items
+    const infoItems = cardElement.querySelectorAll('.info-item .info-value');
+    if (infoItems.length >= 6) {
+        // Status
+        if (infoItems[0].textContent !== torrent.state) {
+            infoItems[0].textContent = torrent.state;
+        }
+        
+        // Seeds
+        const seedsValue = String(torrent.seeds);
+        if (infoItems[1].textContent !== seedsValue) {
+            infoItems[1].textContent = seedsValue;
+            infoItems[1].className = `info-value ${torrent.seeds > 0 ? 'highlight' : ''}`;
+        }
+        
+        // Peers
+        const peersValue = String(torrent.peers);
+        if (infoItems[2].textContent !== peersValue) {
+            infoItems[2].textContent = peersValue;
+        }
+        
+        // Down Speed
+        const downSpeed = formatSpeed(torrent.dlspeed);
+        if (infoItems[3].textContent !== downSpeed) {
+            infoItems[3].textContent = downSpeed;
+            infoItems[3].className = `info-value ${torrent.dlspeed > 0 ? 'highlight' : ''}`;
+        }
+        
+        // Up Speed
+        const upSpeed = formatSpeed(torrent.upspeed);
+        if (infoItems[4].textContent !== upSpeed) {
+            infoItems[4].textContent = upSpeed;
+        }
+        
+        // ETA
+        const eta = formatETA(torrent.eta);
+        if (infoItems[5].textContent !== eta) {
+            infoItems[5].textContent = eta;
+            infoItems[5].className = `info-value ${torrent.eta > 0 && torrent.eta < 3600 ? 'warning' : ''}`;
+        }
+    }
+    
+    // Update event handlers if state changed
+    const currentState = cardElement.getAttribute('onclick')?.match(/'([^']+)'\)/)?.[1];
+    if (currentState !== torrent.state) {
+        cardElement.setAttribute('ontouchstart', `handleTorrentTouchStart(event, '${escapeHtml(torrent.hash)}', '${escapeHtml(torrent.state)}')`);
+        cardElement.setAttribute('onclick', `handleTorrentClick(event, '${escapeHtml(torrent.hash)}', '${escapeHtml(torrent.state)}')`);
+    }
+}
+
 // Update torrents list smoothly
 function updateTorrentsList(torrents) {
     const loadingEl = document.getElementById('loading');
     const errorEl = document.getElementById('error');
     const torrentsListEl = document.getElementById('torrentsList');
     
-    // Save scroll position before update
-    const scrollPosition = window.scrollY || document.documentElement.scrollTop;
-    
     loadingEl.style.display = 'none';
     errorEl.style.display = 'none';
     
     if (torrents.length === 0) {
-        torrentsListEl.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-state-icon">📭</div>
-                <div class="empty-state-text">No torrents found</div>
-                <div class="empty-state-subtext">Add some torrents to see them here</div>
-            </div>
-        `;
-    } else {
-        torrentsListEl.innerHTML = torrents.map(renderTorrent).join('');
+        // Only replace if not already showing empty state
+        if (!torrentsListEl.querySelector('.empty-state')) {
+            torrentsListEl.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">📭</div>
+                    <div class="empty-state-text">No torrents found</div>
+                    <div class="empty-state-subtext">Add some torrents to see them here</div>
+                </div>
+            `;
+        }
         updateStats(torrents);
+        return;
     }
     
-    // Restore scroll position after DOM update
-    requestAnimationFrame(() => {
-        window.scrollTo(0, scrollPosition);
+    // Remove empty state if present
+    const emptyState = torrentsListEl.querySelector('.empty-state');
+    if (emptyState) {
+        emptyState.remove();
+    }
+    
+    // Create a map of existing torrent cards by hash
+    const existingCards = new Map();
+    const cards = torrentsListEl.querySelectorAll('.torrent-card');
+    cards.forEach(card => {
+        const hash = card.dataset.hash;
+        if (hash) {
+            existingCards.set(hash, card);
+        }
     });
+    
+    // Create a map of new torrents by hash
+    const newTorrentsMap = new Map();
+    torrents.forEach(torrent => {
+        newTorrentsMap.set(torrent.hash, torrent);
+    });
+    
+    // Remove torrents that no longer exist
+    existingCards.forEach((card, hash) => {
+        if (!newTorrentsMap.has(hash)) {
+            card.remove();
+        }
+    });
+    
+    // Update existing torrents or add new ones
+    const fragment = document.createDocumentFragment();
+    torrents.forEach((torrent) => {
+        const existingCard = existingCards.get(torrent.hash);
+        
+        if (existingCard) {
+            // Update existing card in place (no DOM removal/reinsertion)
+            updateTorrentCard(existingCard, torrent);
+        } else {
+            // Create new card
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = renderTorrent(torrent);
+            const newCard = tempDiv.firstElementChild;
+            fragment.appendChild(newCard);
+        }
+    });
+    
+    // Insert new cards at the end
+    if (fragment.children.length > 0) {
+        torrentsListEl.appendChild(fragment);
+    }
+    
+    updateStats(torrents);
 }
 
 // Connect WebSocket
