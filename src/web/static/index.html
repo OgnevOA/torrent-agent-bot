@@ -3,15 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Torrent Manager</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v={{ version }}">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
 <body>
     <div class="container">
         <header class="header">
-            <h1>📥 Torrent Manager 1.0.3</h1>
+            <h1>📥 Torrent Manager {{ version }}</h1>
             <div class="refresh-indicator" id="refreshIndicator">
                 <span class="refresh-dot" id="connectionDot"></span>
                 <span id="connectionStatus">Connecting...</span>
@@ -106,7 +109,7 @@
         </div>
     </div>
     
-    <script src="app.js"></script>
+    <script src="app.js?v={{ version }}"></script>
 </body>
 </html>
 

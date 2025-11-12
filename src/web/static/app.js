@@ -197,6 +197,7 @@ function connectWebSocket() {
     
     // Get initData from Telegram Web App
     const initData = tg.initData || tg.initDataUnsafe || '';
+    const chatId = getChatId();
     
     if (!initData) {
         updateConnectionStatus('No auth data', false);
@@ -211,14 +212,27 @@ function connectWebSocket() {
         socket.disconnect();
     }
     
+    // Prepare auth and query data
+    const authData = {
+        initData: initData
+    };
+    const queryData = {
+        initData: initData
+    };
+    
+    // Add chat_id if available (for additional security layer)
+    if (chatId) {
+        authData.chatId = chatId;
+        queryData.chatId = chatId;
+    }
+    
     // Connect to WebSocket server
     socket = io({
-        auth: {
-            initData: initData
-        },
-        query: {
-            initData: initData
-        },
+        auth: authData,
+        query: queryData,
+        extraHeaders: chatId ? {
+            'X-Chat-ID': chatId
+        } : {},
         transports: ['websocket', 'polling'],
         reconnection: true,
         reconnectionDelay: 1000,
@@ -519,12 +533,41 @@ function initContextMenu() {
 }
 
 // API Functions
+function getChatId() {
+    // Extract chat_id from Telegram Web App initData
+    try {
+        const initData = tg.initData || tg.initDataUnsafe || '';
+        if (initData) {
+            // Parse initData to extract user.id (chat_id)
+            const params = new URLSearchParams(initData);
+            const userParam = params.get('user');
+            if (userParam) {
+                const userData = JSON.parse(userParam);
+                return userData.id ? String(userData.id) : null;
+            }
+        }
+        // Fallback: try to get from Telegram Web App user object
+        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+            return String(tg.initDataUnsafe.user.id);
+        }
+    } catch (error) {
+        console.error('Error extracting chat_id:', error);
+    }
+    return null;
+}
+
 function getAuthHeader() {
     const initData = tg.initData || tg.initDataUnsafe || '';
-    return {
+    const chatId = getChatId();
+    const headers = {
         'X-Telegram-Init-Data': initData,
         'Content-Type': 'application/json'
     };
+    // Add chat_id header if available
+    if (chatId) {
+        headers['X-Chat-ID'] = chatId;
+    }
+    return headers;
 }
 
 async function pauseTorrent(hash) {
@@ -595,7 +638,16 @@ async function showFileModal(hash) {
     
     try {
         const initData = tg.initData || tg.initDataUnsafe || '';
-        const response = await fetch(`/api/torrents/${hash}/files?_auth=${encodeURIComponent(initData)}`);
+        const chatId = getChatId();
+        const headers = {
+            'X-Telegram-Init-Data': initData
+        };
+        if (chatId) {
+            headers['X-Chat-ID'] = chatId;
+        }
+        const response = await fetch(`/api/torrents/${hash}/files?_auth=${encodeURIComponent(initData)}`, {
+            headers: headers
+        });
         const data = await response.json();
         
         if (data.files) {
@@ -665,12 +717,17 @@ async function setFilePriority(fileId, priority) {
     
     try {
         const initData = tg.initData || tg.initDataUnsafe || '';
+        const chatId = getChatId();
+        const headers = {
+            'X-Telegram-Init-Data': initData,
+            'Content-Type': 'application/json'
+        };
+        if (chatId) {
+            headers['X-Chat-ID'] = chatId;
+        }
         const response = await fetch(`/api/torrents/${currentTorrentHash}/files/priority`, {
             method: 'POST',
-            headers: {
-                'X-Telegram-Init-Data': initData,
-                'Content-Type': 'application/json'
-            },
+            headers: headers,
             body: JSON.stringify({
                 file_ids: [fileId],
                 priority: parseInt(priority)
@@ -720,12 +777,17 @@ async function confirmDelete() {
     
     try {
         const initData = tg.initData || tg.initDataUnsafe || '';
+        const chatId = getChatId();
+        const headers = {
+            'X-Telegram-Init-Data': initData,
+            'Content-Type': 'application/json'
+        };
+        if (chatId) {
+            headers['X-Chat-ID'] = chatId;
+        }
         const response = await fetch(`/api/torrents/${currentTorrentHash}/delete`, {
             method: 'POST',
-            headers: {
-                'X-Telegram-Init-Data': initData,
-                'Content-Type': 'application/json'
-            },
+            headers: headers,
             body: JSON.stringify({ delete_files: deleteFiles })
         });
         
