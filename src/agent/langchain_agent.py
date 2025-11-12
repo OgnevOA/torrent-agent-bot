@@ -20,7 +20,7 @@ class TorrentSearchAgent:
         # Using gemini-2.0-flash-exp (experimental, free)
         # Alternatives: "gemini-1.5-flash" (stable free) or "gemini-1.5-pro"
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash-exp",  # Experimental free model
+            model="gemini-2.5-flash",  # Experimental free model
             google_api_key=settings.google_api_key,
             temperature=0.3,  # Lower temperature for more consistent extraction
             convert_system_message_to_human=True
