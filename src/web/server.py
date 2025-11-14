@@ -13,11 +13,91 @@ from flask_socketio import SocketIO, emit, disconnect
 
 from src.config.settings import settings
 from src.qbittorrent.client import QBittorrentClient
+from src.metadata.title_parser import parse_torrent_title
+from src.metadata.tmdb_client import TMDBClient
+from src.metadata.cache import MetadataCache
 
 logger = logging.getLogger(__name__)
 
 # Application version - update this when making changes
 APP_VERSION = "1.0.4"
+
+# Initialize metadata services (lazy initialization)
+_metadata_cache = None
+_tmdb_client = None
+
+
+def get_metadata_cache() -> MetadataCache:
+    """Get or create the metadata cache instance."""
+    global _metadata_cache
+    if _metadata_cache is None:
+        _metadata_cache = MetadataCache()
+    return _metadata_cache
+
+
+def get_tmdb_client() -> Optional[TMDBClient]:
+    """Get or create the TMDB client instance."""
+    global _tmdb_client
+    if _tmdb_client is None:
+        try:
+            if settings.tmdb_api_key:
+                _tmdb_client = TMDBClient(api_key=settings.tmdb_api_key)
+            else:
+                logger.debug("TMDB API key not configured, metadata lookup disabled")
+                return None
+        except Exception as e:
+            logger.warning(f"Failed to initialize TMDB client: {e}")
+            return None
+    return _tmdb_client
+
+
+def get_torrent_metadata(torrent_name: str) -> Optional[Dict[str, Any]]:
+    """
+    Get metadata for a torrent by parsing its name and looking up in TMDB.
+    
+    Args:
+        torrent_name: Name of the torrent
+        
+    Returns:
+        Metadata dict or None if not found/not available
+    """
+    if not torrent_name:
+        return None
+    
+    # Check if TMDB is available
+    tmdb = get_tmdb_client()
+    if not tmdb or not tmdb.enabled:
+        return None
+    
+    # Parse the torrent title
+    parsed = parse_torrent_title(torrent_name)
+    title = parsed.get('title', '').strip()
+    
+    if not title:
+        return None
+    
+    # Check cache first
+    cache = get_metadata_cache()
+    cached = cache.get(title, parsed.get('year'))
+    if cached:
+        return cached
+    
+    # Look up in TMDB
+    try:
+        metadata = tmdb.get_metadata(
+            title=title,
+            year=parsed.get('year'),
+            media_type=parsed.get('media_type', 'movie')
+        )
+        
+        if metadata:
+            # Cache the result
+            cache.set(title, metadata, parsed.get('year'))
+            return metadata
+    except Exception as e:
+        logger.debug(f"Error fetching metadata for '{title}': {e}")
+    
+    return None
 
 # Get the directory where this file is located
 BASE_DIR = Path(__file__).parent
@@ -193,15 +273,17 @@ def get_torrents():
 
 
 def format_torrents(torrents: list) -> list:
-    """Format torrents for frontend."""
+    """Format torrents for frontend with optional metadata enrichment."""
     formatted_torrents = []
     for torrent in torrents:
         progress_decimal = torrent.get('progress', 0)
         progress_percent = progress_decimal * 100
         
+        torrent_name = torrent.get('name', 'Unknown')
+        
         formatted_torrent = {
             'hash': torrent.get('hash', ''),
-            'name': torrent.get('name', 'Unknown'),
+            'name': torrent_name,
             'size': torrent.get('size', 0),
             'progress': round(progress_percent, 1),
             'state': torrent.get('state', 'unknown'),
@@ -211,6 +293,15 @@ def format_torrents(torrents: list) -> list:
             'upspeed': torrent.get('upspeed', 0),
             'eta': torrent.get('eta', -1),
         }
+        
+        # Try to get metadata (non-blocking, fails gracefully)
+        try:
+            metadata = get_torrent_metadata(torrent_name)
+            if metadata:
+                formatted_torrent['metadata'] = metadata
+        except Exception as e:
+            logger.debug(f"Error getting metadata for torrent '{torrent_name}': {e}")
+        
         formatted_torrents.append(formatted_torrent)
     return formatted_torrents
 

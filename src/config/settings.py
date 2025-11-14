@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # Google Gemini
     google_api_key: str
     
+    # TMDB (The Movie Database) - Optional, for metadata enrichment in web UI
+    tmdb_api_key: str = Field(default="", description="TMDB API Key (v3) for movie/TV show metadata")
+    
     # Web App Configuration
     # Note: Telegram Mini Apps require HTTPS (except localhost)
     # For local testing, you can use:

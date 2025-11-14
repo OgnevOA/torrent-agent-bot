@@ -75,6 +75,11 @@ QBITTORRENT_PASSWORD=your_qbittorrent_password
 # Google Gemini API
 # Get your API key from https://aistudio.google.com/apikey
 GOOGLE_API_KEY=your_google_api_key_here
+
+# TMDB API (Optional - for movie/TV show metadata in web UI)
+# Get your API key from https://www.themoviedb.org/settings/api
+# This enables automatic metadata lookup (posters, descriptions, ratings) for movies/TV shows
+TMDB_API_KEY=your_tmdb_api_key_here
 ```
 
 **Note:** Quotes are NOT required for these values. Only use quotes if your value contains spaces or special characters that need escaping. For example:
@@ -93,6 +98,7 @@ Edit the `.env` file with your credentials:
 - `QBITTORRENT_USERNAME`: qBittorrent Web UI username
 - `QBITTORRENT_PASSWORD`: qBittorrent Web UI password
 - `GOOGLE_API_KEY`: Get from [Google AI Studio](https://aistudio.google.com/apikey) (free tier available)
+- `TMDB_API_KEY`: (Optional) Get from [TMDB Settings](https://www.themoviedb.org/settings/api) - Enables movie/TV show metadata (posters, descriptions, ratings) in the web UI
 
 ### Running
 
