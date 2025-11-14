@@ -62,20 +62,31 @@ class TMDBClient:
             if not results:
                 return None
             
+            # Convert results to list if needed and handle object attributes
+            if not isinstance(results, list):
+                results = list(results) if hasattr(results, '__iter__') else [results]
+            
             # If year is provided, try to find exact match
             if year:
                 for result in results:
-                    release_date = result.get('release_date', '')
+                    result_dict = self._to_dict(result)
+                    release_date = result_dict.get('release_date', '')
                     if release_date:
-                        result_year = int(release_date.split('-')[0])
-                        if result_year == year:
-                            return self._format_movie_metadata(result)
+                        try:
+                            result_year = int(str(release_date).split('-')[0])
+                            if result_year == year:
+                                return self._format_movie_metadata(result_dict)
+                        except (ValueError, AttributeError):
+                            continue
             
             # Return first result
-            return self._format_movie_metadata(results[0])
+            if results:
+                return self._format_movie_metadata(self._to_dict(results[0]))
+            
+            return None
             
         except Exception as e:
-            logger.error(f"Error searching for movie '{title}': {e}")
+            logger.error(f"Error searching for movie '{title}': {e}", exc_info=True)
             return None
     
     def search_tv_show(self, title: str) -> Optional[Dict[str, Any]]:
@@ -96,11 +107,18 @@ class TMDBClient:
             if not results:
                 return None
             
+            # Convert results to list if needed
+            if not isinstance(results, list):
+                results = list(results) if hasattr(results, '__iter__') else [results]
+            
             # Return first result
-            return self._format_tv_metadata(results[0])
+            if results:
+                return self._format_tv_metadata(self._to_dict(results[0]))
+            
+            return None
             
         except Exception as e:
-            logger.error(f"Error searching for TV show '{title}': {e}")
+            logger.error(f"Error searching for TV show '{title}': {e}", exc_info=True)
             return None
     
     def get_metadata(self, title: str, year: Optional[int] = None, media_type: str = 'movie') -> Optional[Dict[str, Any]]:
@@ -123,6 +141,58 @@ class TMDBClient:
         else:
             return self.search_movie(title, year)
     
+    def _to_dict(self, obj: Any) -> Dict[str, Any]:
+        """
+        Convert a TMDB object to a dictionary.
+        
+        Args:
+            obj: TMDB object (could be dict, object with attributes, or string)
+            
+        Returns:
+            Dictionary representation
+        """
+        if isinstance(obj, dict):
+            # Already a dict, but ensure all keys are strings
+            result = {}
+            for k, v in obj.items():
+                result[str(k)] = v
+            return result
+        elif isinstance(obj, str):
+            # If it's a string, return empty dict (shouldn't happen but handle gracefully)
+            logger.warning(f"Received string instead of object: {obj}")
+            return {}
+        elif hasattr(obj, '__dict__'):
+            # Object with __dict__ attribute - convert to dict with string keys
+            result = {}
+            for k, v in obj.__dict__.items():
+                # Skip private attributes and ensure keys are strings
+                if not k.startswith('_'):
+                    result[str(k)] = v
+            return result
+        elif hasattr(obj, '__getitem__'):
+            # Try to convert using dict() constructor
+            try:
+                result = {}
+                for k in obj:
+                    result[str(k)] = obj[k]
+                return result
+            except (TypeError, ValueError, KeyError):
+                pass
+        
+        # Try accessing common attributes directly
+        result = {}
+        for attr in ['id', 'title', 'name', 'release_date', 'first_air_date', 'poster_path', 
+                     'overview', 'vote_average', 'genres', 'genre_ids']:
+            try:
+                if hasattr(obj, attr):
+                    value = getattr(obj, attr, None)
+                    if value is not None:
+                        result[attr] = value
+            except Exception:
+                continue
+        
+        return result if result else {}
+    
     def _format_movie_metadata(self, movie_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Format movie data from TMDB into our standard format.
@@ -135,14 +205,18 @@ class TMDBClient:
         """
         # Get full details for poster URL
         movie_id = movie_data.get('id')
-        if movie_id:
+        poster_path = movie_data.get('poster_path') or ''
+        
+        if movie_id and not poster_path:
             try:
                 details = self.movie.details(movie_id)
-                poster_path = details.get('poster_path', '')
-            except Exception:
-                poster_path = movie_data.get('poster_path', '')
-        else:
-            poster_path = movie_data.get('poster_path', '')
+                details_dict = self._to_dict(details)
+                poster_path = details_dict.get('poster_path') or ''
+                # Update movie_data with full details if we got them
+                if details_dict.get('genres'):
+                    movie_data['genres'] = details_dict.get('genres', [])
+            except Exception as e:
+                logger.debug(f"Could not get movie details for ID {movie_id}: {e}")
         
         # Build poster URL
         poster_url = None
@@ -160,12 +234,17 @@ class TMDBClient:
         
         # Get genres
         genres = []
-        if 'genre_ids' in movie_data:
-            # We have genre IDs, but not names - would need genre list
-            # For now, just use empty list
-            pass
-        elif 'genres' in movie_data:
-            genres = [g.get('name', '') for g in movie_data.get('genres', []) if g.get('name')]
+        if 'genres' in movie_data:
+            genre_list = movie_data.get('genres', [])
+            for g in genre_list:
+                if isinstance(g, dict):
+                    genre_name = g.get('name', '')
+                elif hasattr(g, 'name'):
+                    genre_name = getattr(g, 'name', '')
+                else:
+                    continue
+                if genre_name:
+                    genres.append(genre_name)
         
         return {
             'poster_url': poster_url,
@@ -190,14 +269,18 @@ class TMDBClient:
         """
         # Get full details for poster URL
         tv_id = tv_data.get('id')
-        if tv_id:
+        poster_path = tv_data.get('poster_path') or ''
+        
+        if tv_id and not poster_path:
             try:
                 details = self.tv.details(tv_id)
-                poster_path = details.get('poster_path', '')
-            except Exception:
-                poster_path = tv_data.get('poster_path', '')
-        else:
-            poster_path = tv_data.get('poster_path', '')
+                details_dict = self._to_dict(details)
+                poster_path = details_dict.get('poster_path') or ''
+                # Update tv_data with full details if we got them
+                if details_dict.get('genres'):
+                    tv_data['genres'] = details_dict.get('genres', [])
+            except Exception as e:
+                logger.debug(f"Could not get TV details for ID {tv_id}: {e}")
         
         # Build poster URL
         poster_url = None
@@ -215,11 +298,17 @@ class TMDBClient:
         
         # Get genres
         genres = []
-        if 'genre_ids' in tv_data:
-            # We have genre IDs, but not names - would need genre list
-            pass
-        elif 'genres' in tv_data:
-            genres = [g.get('name', '') for g in tv_data.get('genres', []) if g.get('name')]
+        if 'genres' in tv_data:
+            genre_list = tv_data.get('genres', [])
+            for g in genre_list:
+                if isinstance(g, dict):
+                    genre_name = g.get('name', '')
+                elif hasattr(g, 'name'):
+                    genre_name = getattr(g, 'name', '')
+                else:
+                    continue
+                if genre_name:
+                    genres.append(genre_name)
         
         return {
             'poster_url': poster_url,
