@@ -36,6 +36,13 @@
             </div>
         </div>
         
+        <div class="filter-bar" id="filterBar">
+            <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">All</button>
+            <button class="filter-btn" data-filter="movies" onclick="setFilter('movies')">Movies</button>
+            <button class="filter-btn" data-filter="tv_shows" onclick="setFilter('tv_shows')">TV Shows</button>
+            <button class="filter-btn" data-filter="other" onclick="setFilter('other')">Other</button>
+        </div>
+        
         <div class="torrents-container" id="torrentsContainer">
             <div class="loading" id="loading">
                 <div class="spinner"></div>

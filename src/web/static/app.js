@@ -54,6 +54,7 @@ function getStatusInfo(state) {
 // Global state
 let currentTorrentHash = null;
 let currentTorrentFiles = [];
+let currentFilter = 'all';
 
 // Touch event tracking for scroll detection
 let touchStartX = 0;
@@ -273,6 +274,52 @@ function updateTorrentCard(cardElement, torrent) {
     }
 }
 
+// Group and sort torrents by category and added date
+function groupAndSortTorrents(torrents) {
+    // Filter torrents based on current filter
+    let filteredTorrents = torrents;
+    if (currentFilter !== 'all') {
+        filteredTorrents = torrents.filter(t => t.category === currentFilter);
+    }
+    
+    // Group by category
+    const categories = {
+        'movies': [],
+        'tv_shows': [],
+        'other': []
+    };
+    
+    filteredTorrents.forEach(torrent => {
+        const category = torrent.category || 'other';
+        if (categories[category]) {
+            categories[category].push(torrent);
+        } else {
+            categories['other'].push(torrent);
+        }
+    });
+    
+    // Sort each category by added_on (newest first)
+    Object.keys(categories).forEach(category => {
+        categories[category].sort((a, b) => {
+            const aTime = a.added_on || 0;
+            const bTime = b.added_on || 0;
+            return bTime - aTime; // Descending order (newest first)
+        });
+    });
+    
+    return categories;
+}
+
+// Get category display name
+function getCategoryName(category) {
+    const names = {
+        'movies': '🎬 Movies',
+        'tv_shows': '📺 TV Shows',
+        'other': '📦 Other'
+    };
+    return names[category] || category;
+}
+
 // Update torrents list smoothly
 function updateTorrentsList(torrents) {
     const loadingEl = document.getElementById('loading');
@@ -297,58 +344,95 @@ function updateTorrentsList(torrents) {
         return;
     }
     
+    // Group and sort torrents
+    const categories = groupAndSortTorrents(torrents);
+    
+    // Check if any category has torrents
+    const hasTorrents = Object.values(categories).some(cat => cat.length > 0);
+    
+    if (!hasTorrents) {
+        if (!torrentsListEl.querySelector('.empty-state')) {
+            torrentsListEl.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">📭</div>
+                    <div class="empty-state-text">No torrents in this category</div>
+                    <div class="empty-state-subtext">Try selecting a different filter</div>
+                </div>
+            `;
+        }
+        updateStats(torrents);
+        return;
+    }
+    
     // Remove empty state if present
     const emptyState = torrentsListEl.querySelector('.empty-state');
     if (emptyState) {
         emptyState.remove();
     }
     
-    // Create a map of existing torrent cards by hash
-    const existingCards = new Map();
-    const cards = torrentsListEl.querySelectorAll('.torrent-card');
-    cards.forEach(card => {
-        const hash = card.dataset.hash;
-        if (hash) {
-            existingCards.set(hash, card);
-        }
-    });
+    // Rebuild the list with categories
+    // For simplicity, we'll rebuild the entire structure
+    // This ensures proper grouping and sorting
+    torrentsListEl.innerHTML = '';
     
-    // Create a map of new torrents by hash
-    const newTorrentsMap = new Map();
-    torrents.forEach(torrent => {
-        newTorrentsMap.set(torrent.hash, torrent);
-    });
+    // Define category order
+    const categoryOrder = ['movies', 'tv_shows', 'other'];
     
-    // Remove torrents that no longer exist
-    existingCards.forEach((card, hash) => {
-        if (!newTorrentsMap.has(hash)) {
-            card.remove();
-        }
-    });
-    
-    // Update existing torrents or add new ones
-    const fragment = document.createDocumentFragment();
-    torrents.forEach((torrent) => {
-        const existingCard = existingCards.get(torrent.hash);
+    categoryOrder.forEach(category => {
+        const categoryTorrents = categories[category];
+        if (categoryTorrents.length === 0) return;
         
-        if (existingCard) {
-            // Update existing card in place (no DOM removal/reinsertion)
-            updateTorrentCard(existingCard, torrent);
-        } else {
-            // Create new card
+        // Create category section
+        const categorySection = document.createElement('div');
+        categorySection.className = 'category-section';
+        categorySection.dataset.category = category;
+        
+        // Create category header
+        const categoryHeader = document.createElement('div');
+        categoryHeader.className = 'category-header';
+        categoryHeader.innerHTML = `
+            <div class="category-title">${getCategoryName(category)}</div>
+            <div class="category-count">${categoryTorrents.length}</div>
+        `;
+        categorySection.appendChild(categoryHeader);
+        
+        // Create category torrents container
+        const categoryTorrentsContainer = document.createElement('div');
+        categoryTorrentsContainer.className = 'torrents-list';
+        
+        categoryTorrents.forEach(torrent => {
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = renderTorrent(torrent);
             const newCard = tempDiv.firstElementChild;
-            fragment.appendChild(newCard);
+            categoryTorrentsContainer.appendChild(newCard);
+        });
+        
+        categorySection.appendChild(categoryTorrentsContainer);
+        torrentsListEl.appendChild(categorySection);
+    });
+    
+    updateStats(torrents);
+}
+
+// Set filter and update display
+function setFilter(filter) {
+    currentFilter = filter;
+    
+    // Update filter buttons
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        if (btn.dataset.filter === filter) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
         }
     });
     
-    // Insert new cards at the end
-    if (fragment.children.length > 0) {
-        torrentsListEl.appendChild(fragment);
+    // Re-render torrents with new filter
+    // We need to get the current torrents from the DOM or store them
+    // For now, we'll trigger a re-render by getting the last received torrents
+    if (window.lastTorrents) {
+        updateTorrentsList(window.lastTorrents);
     }
-    
-    updateStats(torrents);
 }
 
 // Connect WebSocket
@@ -421,6 +505,7 @@ function connectWebSocket() {
     // Receive torrent updates
     socket.on('torrents_update', (data) => {
         const torrents = data.torrents || [];
+        window.lastTorrents = torrents; // Store for filtering
         updateTorrentsList(torrents);
     });
     

@@ -21,7 +21,7 @@ from src.metadata.ai_parser import extract_title_with_ai
 logger = logging.getLogger(__name__)
 
 # Application version - update this when making changes
-APP_VERSION = "1.0.4"
+APP_VERSION = "1.1.2"
 
 # Initialize metadata services (lazy initialization)
 _metadata_cache = None
@@ -322,6 +322,8 @@ def get_torrents():
                 'dlspeed': torrent.get('dlspeed', 0),
                 'upspeed': torrent.get('upspeed', 0),
                 'eta': torrent.get('eta', -1),
+                'added_on': torrent.get('added_on', 0),  # Unix timestamp
+                'category': 'other',  # Default category, will be updated if metadata is available
             }
             formatted_torrents.append(formatted_torrent)
         
@@ -352,6 +354,7 @@ def format_torrents(torrents: list) -> list:
             'dlspeed': torrent.get('dlspeed', 0),
             'upspeed': torrent.get('upspeed', 0),
             'eta': torrent.get('eta', -1),
+            'added_on': torrent.get('added_on', 0),  # Unix timestamp
         }
         
         # Try to get metadata (non-blocking, fails gracefully)
@@ -360,8 +363,19 @@ def format_torrents(torrents: list) -> list:
             metadata = get_torrent_metadata(torrent_name, torrent_hash=torrent_hash if torrent_hash else None)
             if metadata:
                 formatted_torrent['metadata'] = metadata
+                # Determine category based on metadata
+                media_type = metadata.get('media_type', 'movie')
+                if media_type == 'movie':
+                    formatted_torrent['category'] = 'movies'
+                elif media_type == 'tv':
+                    formatted_torrent['category'] = 'tv_shows'
+                else:
+                    formatted_torrent['category'] = 'other'
+            else:
+                formatted_torrent['category'] = 'other'
         except Exception as e:
             logger.debug(f"Error getting metadata for torrent '{torrent_name}': {e}")
+            formatted_torrent['category'] = 'other'
         
         formatted_torrents.append(formatted_torrent)
     return formatted_torrents

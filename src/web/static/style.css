@@ -89,6 +89,53 @@ body {
     flex-wrap: wrap;
 }
 
+.filter-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 8px;
+    background: var(--bg-secondary);
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.filter-bar::-webkit-scrollbar {
+    display: none;
+}
+
+.filter-btn {
+    padding: 8px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.filter-btn:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--accent-blue);
+    color: var(--text-primary);
+}
+
+.filter-btn.active {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    color: white;
+}
+
+.filter-btn.active:hover {
+    background: #2a7fd4;
+    border-color: #2a7fd4;
+}
+
 .stat-item {
     display: flex;
     align-items: center;
@@ -174,6 +221,36 @@ body {
     display: flex;
     flex-direction: column;
     gap: 8px;
+}
+
+.category-section {
+    margin-bottom: 20px;
+}
+
+.category-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.category-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.category-count {
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--bg-card);
+    padding: 4px 8px;
+    border-radius: 6px;
 }
 
 .torrent-card {
@@ -457,6 +534,30 @@ body {
     
     .stat-value {
         font-size: 12px;
+    }
+    
+    .filter-bar {
+        padding: 6px;
+        gap: 6px;
+        margin-bottom: 10px;
+    }
+    
+    .filter-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+    
+    .category-header {
+        padding: 8px 10px;
+    }
+    
+    .category-title {
+        font-size: 14px;
+    }
+    
+    .category-count {
+        font-size: 11px;
+        padding: 3px 6px;
     }
     
     .torrent-card {
