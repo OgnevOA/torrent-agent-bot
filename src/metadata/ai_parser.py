@@ -70,6 +70,8 @@ def extract_title_with_ai(torrent_name: str) -> Optional[Dict[str, Any]]:
         return None
     
     try:
+        logger.info(f"🤖 AI Title Extraction Request: '{torrent_name}'")
+        
         # Initialize Gemini
         llm = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash",
@@ -82,31 +84,48 @@ def extract_title_with_ai(torrent_name: str) -> Optional[Dict[str, Any]]:
         prompt_template = ChatPromptTemplate.from_template(TITLE_EXTRACTION_PROMPT)
         prompt = prompt_template.format_messages(torrent_name=torrent_name)
         
+        logger.debug(f"AI Prompt created for: {torrent_name}")
+        
         # Get response from AI
+        logger.debug("Sending request to Gemini AI...")
         response = llm.invoke(prompt)
         content = response.content.strip()
+        
+        logger.info(f"🤖 AI Response (raw): {content[:200]}{'...' if len(content) > 200 else ''}")
         
         # Remove markdown code blocks if present
         if content.startswith("```"):
             lines = content.split("\n")
             content = "\n".join(lines[1:-1]) if len(lines) > 2 else content
+            logger.debug("Removed markdown code blocks from AI response")
         
         # Try to extract JSON
+        parsed = None
         try:
             parsed = json.loads(content)
+            logger.debug("Successfully parsed AI response as JSON")
         except json.JSONDecodeError:
             # Try to find JSON in the response
+            logger.debug("Direct JSON parse failed, searching for JSON in response...")
             json_match = re.search(r'\{[^}]*\}', content, re.DOTALL)
             if json_match:
-                parsed = json.loads(json_match.group())
+                try:
+                    parsed = json.loads(json_match.group())
+                    logger.debug("Found and parsed JSON from response")
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Could not parse extracted JSON: {e}")
             else:
-                logger.warning(f"Could not parse JSON from AI response: {content}")
+                logger.warning(f"Could not find JSON in AI response. Full response: {content}")
                 return None
+        
+        if not parsed:
+            logger.warning("Failed to parse AI response")
+            return None
         
         # Validate and return
         title = parsed.get('title', '').strip()
         if not title:
-            logger.debug("AI returned empty title")
+            logger.warning(f"AI returned empty title. Parsed data: {parsed}")
             return None
         
         result = {
@@ -117,7 +136,7 @@ def extract_title_with_ai(torrent_name: str) -> Optional[Dict[str, Any]]:
             'episode': parsed.get('episode')
         }
         
-        logger.debug(f"AI extracted from '{torrent_name}': {result}")
+        logger.info(f"✅ AI Extraction Result: title='{result['title']}', type={result['media_type']}, year={result['year']}, season={result['season']}, episode={result['episode']}")
         return result
         
     except Exception as e:
