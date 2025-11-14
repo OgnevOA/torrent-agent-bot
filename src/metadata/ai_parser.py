@@ -30,6 +30,12 @@ Your task is to identify the actual movie or TV show name from a torrent filenam
 - Audio/video codec information
 - Other metadata
 
+IMPORTANT: The title may be in Russian, either:
+1. Written in English letters (transliteration), e.g., "Chuzhoi" -> "Alien"
+2. Written in Cyrillic, e.g., "Гарри Поттер и Дары Смерти Часть I" -> "Harry Potter and the Deathly Hallows: Part I"
+
+You MUST always return the title in English (the original English title), not the Russian transliteration or Cyrillic version.
+
 Extract the clean title that would be used to search in a movie/TV database like TMDB.
 
 Examples:
@@ -37,10 +43,12 @@ Examples:
 - "Castle.S05.720p.WEB-DL.FoxLife" -> {{"title": "Castle", "season": 5, "media_type": "tv"}}
 - "Game.of.Thrones.S01E01.1080p" -> {{"title": "Game of Thrones", "season": 1, "episode": 1, "media_type": "tv"}}
 - "Indiana.Jones.and.the.Last.Crusade.BDRemux.mkv" -> {{"title": "Indiana Jones and the Last Crusade", "media_type": "movie"}}
+- "Chuzhoi.1979.1080p.BluRay" -> {{"title": "Alien", "year": 1979, "media_type": "movie"}}
+- "Гарри Поттер и Дары Смерти Часть I.2010.1080p" -> {{"title": "Harry Potter and the Deathly Hallows: Part I", "year": 2010, "media_type": "movie"}}
 
 Respond ONLY with valid JSON in this format:
 {{
-    "title": "Clean title for database search",
+    "title": "Clean title for database search (ALWAYS in English)",
     "media_type": "movie" or "tv",
     "year": <year number or null>,
     "season": <season number or null>,
