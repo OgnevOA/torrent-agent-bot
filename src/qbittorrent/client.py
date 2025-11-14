@@ -37,7 +37,7 @@ class QBittorrentClient:
         try:
             self.client.auth_log_in()
             self._authenticated = True
-            logger.info("Successfully connected to qBittorrent")
+            # logger.info("Successfully connected to qBittorrent")
             return True
         except LoginFailed as e:
             logger.error(f"qBittorrent login failed: {e}")

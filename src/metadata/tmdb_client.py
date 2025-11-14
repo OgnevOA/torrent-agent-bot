@@ -58,13 +58,34 @@ class TMDBClient:
             return None
         
         try:
-            results = self.movie.search(title)
+            search_response = self.movie.search(title)
+            if not search_response:
+                return None
+            
+            # TMDB search returns a dict/object with 'results' key containing the list
+            # Extract the results list
+            if isinstance(search_response, dict):
+                results = search_response.get('results', [])
+            elif hasattr(search_response, 'results'):
+                results = getattr(search_response, 'results', [])
+            elif isinstance(search_response, list):
+                results = search_response
+            else:
+                # Try to convert and extract
+                response_dict = self._to_dict(search_response)
+                results = response_dict.get('results', [])
+                if not results and isinstance(response_dict, list):
+                    results = response_dict
+            
             if not results:
                 return None
             
-            # Convert results to list if needed and handle object attributes
+            # Convert results to list if needed
             if not isinstance(results, list):
-                results = list(results) if hasattr(results, '__iter__') else [results]
+                results = list(results) if hasattr(results, '__iter__') else []
+            
+            if not results:
+                return None
             
             # If year is provided, try to find exact match
             if year:
@@ -80,10 +101,7 @@ class TMDBClient:
                             continue
             
             # Return first result
-            if results:
-                return self._format_movie_metadata(self._to_dict(results[0]))
-            
-            return None
+            return self._format_movie_metadata(self._to_dict(results[0]))
             
         except Exception as e:
             logger.error(f"Error searching for movie '{title}': {e}", exc_info=True)
@@ -103,19 +121,37 @@ class TMDBClient:
             return None
         
         try:
-            results = self.tv.search(title)
+            search_response = self.tv.search(title)
+            if not search_response:
+                return None
+            
+            # TMDB search returns a dict/object with 'results' key containing the list
+            # Extract the results list
+            if isinstance(search_response, dict):
+                results = search_response.get('results', [])
+            elif hasattr(search_response, 'results'):
+                results = getattr(search_response, 'results', [])
+            elif isinstance(search_response, list):
+                results = search_response
+            else:
+                # Try to convert and extract
+                response_dict = self._to_dict(search_response)
+                results = response_dict.get('results', [])
+                if not results and isinstance(response_dict, list):
+                    results = response_dict
+            
             if not results:
                 return None
             
             # Convert results to list if needed
             if not isinstance(results, list):
-                results = list(results) if hasattr(results, '__iter__') else [results]
+                results = list(results) if hasattr(results, '__iter__') else []
+            
+            if not results:
+                return None
             
             # Return first result
-            if results:
-                return self._format_tv_metadata(self._to_dict(results[0]))
-            
-            return None
+            return self._format_tv_metadata(self._to_dict(results[0]))
             
         except Exception as e:
             logger.error(f"Error searching for TV show '{title}': {e}", exc_info=True)
@@ -151,16 +187,18 @@ class TMDBClient:
         Returns:
             Dictionary representation
         """
+        # Skip strings - they're likely keys from iterating over a dict
+        if isinstance(obj, str):
+            # Don't log warning for common dict keys like 'page', 'results', etc.
+            # These are expected when iterating over response wrappers
+            return {}
+        
         if isinstance(obj, dict):
             # Already a dict, but ensure all keys are strings
             result = {}
             for k, v in obj.items():
                 result[str(k)] = v
             return result
-        elif isinstance(obj, str):
-            # If it's a string, return empty dict (shouldn't happen but handle gracefully)
-            logger.warning(f"Received string instead of object: {obj}")
-            return {}
         elif hasattr(obj, '__dict__'):
             # Object with __dict__ attribute - convert to dict with string keys
             result = {}
@@ -169,8 +207,8 @@ class TMDBClient:
                 if not k.startswith('_'):
                     result[str(k)] = v
             return result
-        elif hasattr(obj, '__getitem__'):
-            # Try to convert using dict() constructor
+        elif hasattr(obj, '__getitem__') and not isinstance(obj, str):
+            # Try to convert using dict() constructor (but not strings)
             try:
                 result = {}
                 for k in obj:
@@ -182,7 +220,8 @@ class TMDBClient:
         # Try accessing common attributes directly
         result = {}
         for attr in ['id', 'title', 'name', 'release_date', 'first_air_date', 'poster_path', 
-                     'overview', 'vote_average', 'genres', 'genre_ids']:
+                     'overview', 'vote_average', 'genres', 'genre_ids', 'results', 'page', 
+                     'total_pages', 'total_results']:
             try:
                 if hasattr(obj, attr):
                     value = getattr(obj, attr, None)
