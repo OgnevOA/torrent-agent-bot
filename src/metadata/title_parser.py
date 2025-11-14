@@ -26,12 +26,13 @@ def parse_torrent_title(torrent_name: str) -> Dict[str, Any]:
     # Clean up common separators
     name = torrent_name.replace('_', ' ').replace('.', ' ')
     
-    # Try to detect TV show pattern first (S##E## or S## E##)
-    tv_pattern = r'[Ss](\d{1,2})[Ee](\d{1,2})'
-    tv_match = re.search(tv_pattern, name)
+    # Try to detect TV show pattern first
+    # Pattern 1: S##E## or S## E## (season and episode)
+    tv_pattern_episode = r'\b[Ss](\d{1,2})[Ee](\d{1,2})\b'
+    tv_match = re.search(tv_pattern_episode, name)
     
     if tv_match:
-        # It's a TV show
+        # It's a TV show with episode
         season = int(tv_match.group(1))
         episode = int(tv_match.group(2))
         
@@ -46,6 +47,33 @@ def parse_torrent_title(torrent_name: str) -> Dict[str, Any]:
             'season': season,
             'episode': episode
         }
+    
+    # Pattern 2: S## or Season ## (season only, no episode)
+    # Look for patterns like "S05", "S5" - but NOT followed by E## (episode)
+    # Match S## that is NOT part of S##E## pattern
+    tv_pattern_season = r'\b[Ss](\d{1,2})\b(?!\s*[Ee]\d)'
+    tv_match_season = re.search(tv_pattern_season, name)
+    
+    if tv_match_season:
+        # It's a TV show (season only, no episode)
+        season_num = int(tv_match_season.group(1))
+        
+        # Only accept reasonable season numbers (1-99)
+        if 1 <= season_num <= 99:
+            # Extract title (everything before S##)
+            title_part = name[:tv_match_season.start()].strip()
+            title = _clean_title(title_part)
+            
+            # Only treat as TV show if we have a reasonable title (not just numbers/quality)
+            # Title should have at least 2 characters and not be just numbers
+            if title and len(title) > 2 and not title.replace(' ', '').isdigit():
+                return {
+                    'title': title,
+                    'year': None,
+                    'media_type': 'tv',
+                    'season': season_num,
+                    'episode': None
+                }
     
     # Try to extract year (4 digits, likely between 1900-2100)
     year_pattern = r'\b(19\d{2}|20[0-2]\d)\b'

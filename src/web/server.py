@@ -72,14 +72,19 @@ def get_torrent_metadata(torrent_name: str) -> Optional[Dict[str, Any]]:
     # Parse the torrent title
     parsed = parse_torrent_title(torrent_name)
     title = parsed.get('title', '').strip()
+    media_type = parsed.get('media_type', 'movie')
     
     if not title:
+        logger.debug(f"Could not extract title from: {torrent_name}")
         return None
+    
+    logger.debug(f"Parsed '{torrent_name}' -> title: '{title}', type: {media_type}, season: {parsed.get('season')}")
     
     # Check cache first
     cache = get_metadata_cache()
     cached = cache.get(title, parsed.get('year'))
     if cached:
+        logger.debug(f"Found cached metadata for: {title}")
         return cached
     
     # Look up in TMDB
@@ -87,15 +92,18 @@ def get_torrent_metadata(torrent_name: str) -> Optional[Dict[str, Any]]:
         metadata = tmdb.get_metadata(
             title=title,
             year=parsed.get('year'),
-            media_type=parsed.get('media_type', 'movie')
+            media_type=media_type
         )
         
         if metadata:
             # Cache the result
             cache.set(title, metadata, parsed.get('year'))
+            logger.debug(f"Successfully fetched metadata for: {title} ({media_type})")
             return metadata
+        else:
+            logger.debug(f"No metadata found in TMDB for: {title} ({media_type})")
     except Exception as e:
-        logger.debug(f"Error fetching metadata for '{title}': {e}")
+        logger.debug(f"Error fetching metadata for '{title}': {e}", exc_info=True)
     
     return None
 
