@@ -52,12 +52,13 @@ def get_tmdb_client() -> Optional[TMDBClient]:
     return _tmdb_client
 
 
-def get_torrent_metadata(torrent_name: str) -> Optional[Dict[str, Any]]:
+def get_torrent_metadata(torrent_name: str, torrent_hash: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     Get metadata for a torrent by parsing its name and looking up in TMDB.
     
     Args:
         torrent_name: Name of the torrent
+        torrent_hash: Optional torrent hash for AI caching
         
     Returns:
         Metadata dict or None if not found/not available
@@ -78,7 +79,7 @@ def get_torrent_metadata(torrent_name: str) -> Optional[Dict[str, Any]]:
     if not title:
         logger.debug(f"Could not extract title from: {torrent_name}, trying AI fallback")
         # Try AI immediately if regex parsing failed
-        ai_parsed = extract_title_with_ai(torrent_name)
+        ai_parsed = extract_title_with_ai(torrent_name, torrent_hash=torrent_hash)
         if ai_parsed:
             title = ai_parsed.get('title', '').strip()
             media_type = ai_parsed.get('media_type', 'movie')
@@ -118,7 +119,7 @@ def get_torrent_metadata(torrent_name: str) -> Optional[Dict[str, Any]]:
             
             # Last resort: Try AI to extract a better title
             logger.debug(f"Attempting AI fallback for: {torrent_name}")
-            ai_parsed = extract_title_with_ai(torrent_name)
+            ai_parsed = extract_title_with_ai(torrent_name, torrent_hash=torrent_hash)
             
             if ai_parsed:
                 ai_title = ai_parsed.get('title', '').strip()
@@ -355,7 +356,8 @@ def format_torrents(torrents: list) -> list:
         
         # Try to get metadata (non-blocking, fails gracefully)
         try:
-            metadata = get_torrent_metadata(torrent_name)
+            torrent_hash = torrent.get('hash', '')
+            metadata = get_torrent_metadata(torrent_name, torrent_hash=torrent_hash if torrent_hash else None)
             if metadata:
                 formatted_torrent['metadata'] = metadata
         except Exception as e:

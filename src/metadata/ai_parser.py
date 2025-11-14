@@ -6,6 +6,9 @@ from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
+# In-memory cache for AI extraction results keyed by torrent hash
+_ai_extraction_cache: Dict[str, Optional[Dict[str, Any]]] = {}
+
 # Try to import Gemini, but make it optional
 try:
     from langchain_google_genai import ChatGoogleGenerativeAI
@@ -47,12 +50,13 @@ Respond ONLY with valid JSON in this format:
 Torrent filename: {torrent_name}"""
 
 
-def extract_title_with_ai(torrent_name: str) -> Optional[Dict[str, Any]]:
+def extract_title_with_ai(torrent_name: str, torrent_hash: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     Use AI (Gemini) to extract clean movie/TV show title from a messy torrent filename.
     
     Args:
         torrent_name: Messy torrent filename
+        torrent_hash: Optional torrent hash for caching (prevents duplicate AI calls)
         
     Returns:
         Dict with title, media_type, year, season, episode or None if failed
@@ -63,6 +67,13 @@ def extract_title_with_ai(torrent_name: str) -> Optional[Dict[str, Any]]:
     
     if not torrent_name or not torrent_name.strip():
         return None
+    
+    # Check cache first using torrent hash (preferred) or torrent name (fallback)
+    cache_key = torrent_hash if torrent_hash else torrent_name
+    if cache_key in _ai_extraction_cache:
+        cached_result = _ai_extraction_cache[cache_key]
+        logger.debug(f"Using cached AI extraction result for {'hash' if torrent_hash else 'name'}: {cache_key[:16] if torrent_hash else cache_key[:50]}...")
+        return cached_result
     
     # Check if Google API key is configured
     if not settings.google_api_key:
@@ -137,9 +148,16 @@ def extract_title_with_ai(torrent_name: str) -> Optional[Dict[str, Any]]:
         }
         
         logger.info(f"✅ AI Extraction Result: title='{result['title']}', type={result['media_type']}, year={result['year']}, season={result['season']}, episode={result['episode']}")
+        
+        # Cache the result (cache None results too to avoid repeated failed attempts)
+        _ai_extraction_cache[cache_key] = result
+        logger.debug(f"Cached AI extraction result for {'hash' if torrent_hash else 'name'}: {cache_key[:16] if torrent_hash else cache_key[:50]}...")
+        
         return result
         
     except Exception as e:
         logger.debug(f"Error in AI title extraction: {e}", exc_info=True)
+        # Cache None to avoid repeated failed attempts
+        _ai_extraction_cache[cache_key] = None
         return None
 
