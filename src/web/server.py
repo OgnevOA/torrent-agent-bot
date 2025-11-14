@@ -16,6 +16,7 @@ from src.qbittorrent.client import QBittorrentClient
 from src.metadata.title_parser import parse_torrent_title
 from src.metadata.tmdb_client import TMDBClient
 from src.metadata.cache import MetadataCache
+from src.metadata.ai_parser import extract_title_with_ai
 
 logger = logging.getLogger(__name__)
 
@@ -75,8 +76,20 @@ def get_torrent_metadata(torrent_name: str) -> Optional[Dict[str, Any]]:
     media_type = parsed.get('media_type', 'movie')
     
     if not title:
-        logger.debug(f"Could not extract title from: {torrent_name}")
-        return None
+        logger.debug(f"Could not extract title from: {torrent_name}, trying AI fallback")
+        # Try AI immediately if regex parsing failed
+        ai_parsed = extract_title_with_ai(torrent_name)
+        if ai_parsed:
+            title = ai_parsed.get('title', '').strip()
+            media_type = ai_parsed.get('media_type', 'movie')
+            parsed['year'] = ai_parsed.get('year')
+            parsed['season'] = ai_parsed.get('season')
+            parsed['episode'] = ai_parsed.get('episode')
+            logger.debug(f"AI extracted title: '{title}' (type: {media_type})")
+        
+        if not title:
+            logger.debug(f"Could not extract title even with AI: {torrent_name}")
+            return None
     
     logger.debug(f"Parsed '{torrent_name}' -> title: '{title}', type: {media_type}, season: {parsed.get('season')}")
     
@@ -102,6 +115,44 @@ def get_torrent_metadata(torrent_name: str) -> Optional[Dict[str, Any]]:
             return metadata
         else:
             logger.debug(f"No metadata found in TMDB for: {title} ({media_type})")
+            
+            # Last resort: Try AI to extract a better title
+            logger.debug(f"Attempting AI fallback for: {torrent_name}")
+            ai_parsed = extract_title_with_ai(torrent_name)
+            
+            if ai_parsed:
+                ai_title = ai_parsed.get('title', '').strip()
+                ai_media_type = ai_parsed.get('media_type', 'movie')
+                ai_year = ai_parsed.get('year')
+                
+                if ai_title and ai_title.lower() != title.lower():
+                    logger.debug(f"AI extracted different title: '{ai_title}' (type: {ai_media_type})")
+                    
+                    # Check cache for AI-extracted title
+                    cached_ai = cache.get(ai_title, ai_year)
+                    if cached_ai:
+                        logger.debug(f"Found cached metadata for AI-extracted title: {ai_title}")
+                        return cached_ai
+                    
+                    # Try TMDB search with AI-extracted title
+                    try:
+                        ai_metadata = tmdb.get_metadata(
+                            title=ai_title,
+                            year=ai_year,
+                            media_type=ai_media_type
+                        )
+                        
+                        if ai_metadata:
+                            # Cache the result
+                            cache.set(ai_title, ai_metadata, ai_year)
+                            logger.debug(f"Successfully fetched metadata using AI-extracted title: {ai_title}")
+                            return ai_metadata
+                        else:
+                            logger.debug(f"No metadata found even with AI-extracted title: {ai_title}")
+                    except Exception as e:
+                        logger.debug(f"Error fetching metadata with AI title '{ai_title}': {e}")
+                else:
+                    logger.debug(f"AI extracted same or empty title, skipping retry")
     except Exception as e:
         logger.debug(f"Error fetching metadata for '{title}': {e}", exc_info=True)
     
