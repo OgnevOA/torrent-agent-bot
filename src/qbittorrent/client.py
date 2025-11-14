@@ -1,7 +1,10 @@
 """qBittorrent API client."""
 import logging
+import re
+import time
 from typing import Optional, List
 
+import requests
 from qbittorrentapi import Client, LoginFailed, APIConnectionError
 
 from src.config.settings import settings
@@ -48,7 +51,8 @@ class QBittorrentClient:
     
     def add_torrent(self, torrent_link: str, category: Optional[str] = None) -> bool:
         """
-        Add a torrent to qBittorrent.
+        Add a torrent to qBittorrent and configure it for sequential download
+        with first/last piece priority.
         
         Args:
             torrent_link: Magnet link or URL to .torrent file
@@ -63,6 +67,14 @@ class QBittorrentClient:
                 return False
         
         try:
+            # Get existing torrent hashes before adding
+            existing_hashes = set()
+            try:
+                existing_torrents = self.client.torrents_info()
+                existing_hashes = {t.hash for t in existing_torrents}
+            except Exception as e:
+                logger.warning(f"Could not get existing torrents to find new hash: {e}")
+            
             # Add torrent via API
             self.client.torrents_add(
                 urls=torrent_link,
@@ -70,6 +82,44 @@ class QBittorrentClient:
                 is_paused=False
             )
             logger.info(f"Successfully added torrent: {torrent_link[:50]}...")
+            
+            # Get the hash of the newly added torrent
+            torrent_hash = None
+            try:
+                # Wait a moment for qBittorrent to process the new torrent
+                time.sleep(0.5)  # Small delay to ensure torrent is processed
+                
+                # Get all torrents and find the new one
+                all_torrents = self.client.torrents_info()
+                for torrent in all_torrents:
+                    if torrent.hash not in existing_hashes:
+                        torrent_hash = torrent.hash
+                        break
+                
+                # If we couldn't find it by hash comparison, try extracting from magnet link
+                if not torrent_hash and torrent_link.startswith("magnet:"):
+                    # Extract hash from magnet link: magnet:?xt=urn:btih:HASH&...
+                    match = re.search(r'btih:([a-fA-F0-9]{40})', torrent_link)
+                    if match:
+                        torrent_hash = match.group(1).lower()
+                
+            except Exception as e:
+                logger.warning(f"Could not determine torrent hash after adding: {e}")
+            
+            # Apply sequential download and first/last piece priority settings
+            if torrent_hash:
+                try:
+                    self.set_torrent_options(
+                        torrent_hash=torrent_hash,
+                        sequential_download=True,
+                        first_last_piece_priority=True
+                    )
+                except Exception as e:
+                    # Log warning but don't fail the torrent addition
+                    logger.warning(f"Failed to set sequential download options for torrent {torrent_hash[:8]}...: {e}")
+            else:
+                logger.warning("Could not determine torrent hash, skipping sequential download configuration")
+            
             return True
         except Exception as e:
             logger.error(f"Failed to add torrent: {e}")
@@ -244,6 +294,67 @@ class QBittorrentClient:
             return True
         except Exception as e:
             logger.error(f"Failed to set file priority: {e}")
+            return False
+    
+    def set_torrent_options(self, torrent_hash: str, sequential_download: bool = True, first_last_piece_priority: bool = True) -> bool:
+        """
+        Set torrent options for sequential download and first/last piece priority.
+        
+        Args:
+            torrent_hash: Hash of the torrent to configure
+            sequential_download: If True, enable sequential download
+            first_last_piece_priority: If True, prioritize downloading first and last pieces first
+            
+        Returns:
+            True if options set successfully, False otherwise
+        """
+        if not self._authenticated:
+            if not self.connect():
+                return False
+        
+        try:
+            # Try using the qbittorrentapi method if available
+            # The method name might vary by library version
+            if hasattr(self.client, 'torrents_set_options'):
+                self.client.torrents_set_options(
+                    torrent_hashes=torrent_hash,
+                    sequentialDownload=sequential_download,
+                    firstLastPiecePrio=first_last_piece_priority
+                )
+            elif hasattr(self.client, 'torrents_set_torrent_options'):
+                self.client.torrents_set_torrent_options(
+                    torrent_hashes=torrent_hash,
+                    sequentialDownload=sequential_download,
+                    firstLastPiecePrio=first_last_piece_priority
+                )
+            else:
+                # Fallback: use requests library directly
+                # qBittorrent API endpoint: POST /api/v2/torrents/setOptions
+                base_url = settings.qbittorrent_url.rstrip('/')
+                api_url = f"{base_url}/api/v2/torrents/setOptions"
+                
+                # Create a session and login
+                session = requests.Session()
+                login_url = f"{base_url}/api/v2/auth/login"
+                login_data = {
+                    'username': settings.qbittorrent_username,
+                    'password': settings.qbittorrent_password
+                }
+                session.post(login_url, data=login_data)
+                
+                # Set torrent options
+                data = {
+                    'hashes': torrent_hash,
+                    'sequentialDownload': str(sequential_download).lower(),
+                    'firstLastPiecePrio': str(first_last_piece_priority).lower()
+                }
+                response = session.post(api_url, data=data)
+                response.raise_for_status()
+            
+            logger.info(f"Successfully set torrent options (sequential={sequential_download}, firstLastPrio={first_last_piece_priority}) for torrent: {torrent_hash[:8]}...")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to set torrent options: {e}")
             return False
     
     def disconnect(self):
