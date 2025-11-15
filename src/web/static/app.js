@@ -370,45 +370,158 @@ function updateTorrentsList(torrents) {
         emptyState.remove();
     }
     
-    // Rebuild the list with categories
-    // For simplicity, we'll rebuild the entire structure
-    // This ensures proper grouping and sorting
-    torrentsListEl.innerHTML = '';
+    // Map existing cards by hash for efficient updates
+    const existingCards = new Map();
+    const allCards = torrentsListEl.querySelectorAll('.torrent-card');
+    allCards.forEach(card => {
+        const hash = card.dataset.hash;
+        if (hash) {
+            existingCards.set(hash, card);
+        }
+    });
+    
+    // Map new torrents by hash
+    const newTorrentsMap = new Map();
+    Object.values(categories).forEach(categoryTorrents => {
+        categoryTorrents.forEach(torrent => {
+            newTorrentsMap.set(torrent.hash, torrent);
+        });
+    });
+    
+    // Remove cards for torrents that no longer exist
+    existingCards.forEach((card, hash) => {
+        if (!newTorrentsMap.has(hash)) {
+            card.remove();
+            existingCards.delete(hash);
+        }
+    });
     
     // Define category order
     const categoryOrder = ['movies', 'tv_shows', 'other'];
     
+    // Get or create category sections
+    const categorySections = new Map();
+    categoryOrder.forEach(category => {
+        let categorySection = torrentsListEl.querySelector(`.category-section[data-category="${category}"]`);
+        
+        if (!categorySection) {
+            // Create new category section
+            categorySection = document.createElement('div');
+            categorySection.className = 'category-section';
+            categorySection.dataset.category = category;
+            
+            const categoryHeader = document.createElement('div');
+            categoryHeader.className = 'category-header';
+            categoryHeader.innerHTML = `
+                <div class="category-title">${getCategoryName(category)}</div>
+                <div class="category-count">0</div>
+            `;
+            categorySection.appendChild(categoryHeader);
+            
+            const categoryTorrentsContainer = document.createElement('div');
+            categoryTorrentsContainer.className = 'torrents-list';
+            categorySection.appendChild(categoryTorrentsContainer);
+            
+            // Insert in correct order
+            let insertBefore = null;
+            for (let i = categoryOrder.indexOf(category) + 1; i < categoryOrder.length; i++) {
+                const nextCategory = categoryOrder[i];
+                const nextSection = torrentsListEl.querySelector(`.category-section[data-category="${nextCategory}"]`);
+                if (nextSection) {
+                    insertBefore = nextSection;
+                    break;
+                }
+            }
+            if (insertBefore) {
+                torrentsListEl.insertBefore(categorySection, insertBefore);
+            } else {
+                torrentsListEl.appendChild(categorySection);
+            }
+        }
+        
+        categorySections.set(category, categorySection);
+    });
+    
+    // Update each category
     categoryOrder.forEach(category => {
         const categoryTorrents = categories[category];
-        if (categoryTorrents.length === 0) return;
+        const categorySection = categorySections.get(category);
+        const categoryTorrentsContainer = categorySection.querySelector('.torrents-list');
+        const categoryCount = categorySection.querySelector('.category-count');
         
-        // Create category section
-        const categorySection = document.createElement('div');
-        categorySection.className = 'category-section';
-        categorySection.dataset.category = category;
+        // Update category count
+        if (categoryCount) {
+            categoryCount.textContent = categoryTorrents.length;
+        }
         
-        // Create category header
-        const categoryHeader = document.createElement('div');
-        categoryHeader.className = 'category-header';
-        categoryHeader.innerHTML = `
-            <div class="category-title">${getCategoryName(category)}</div>
-            <div class="category-count">${categoryTorrents.length}</div>
-        `;
-        categorySection.appendChild(categoryHeader);
+        // Show/hide category section based on whether it has torrents
+        if (categoryTorrents.length === 0) {
+            categorySection.style.display = 'none';
+            return;
+        } else {
+            categorySection.style.display = 'block';
+        }
         
-        // Create category torrents container
-        const categoryTorrentsContainer = document.createElement('div');
-        categoryTorrentsContainer.className = 'torrents-list';
-        
-        categoryTorrents.forEach(torrent => {
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = renderTorrent(torrent);
-            const newCard = tempDiv.firstElementChild;
-            categoryTorrentsContainer.appendChild(newCard);
+        // Map existing cards in this category by hash
+        const existingCardsInCategory = new Map();
+        categoryTorrentsContainer.querySelectorAll('.torrent-card').forEach(card => {
+            const hash = card.dataset.hash;
+            if (hash) {
+                existingCardsInCategory.set(hash, card);
+            }
         });
         
-        categorySection.appendChild(categoryTorrentsContainer);
-        torrentsListEl.appendChild(categorySection);
+        // Update or add torrents in this category
+        categoryTorrents.forEach((torrent, index) => {
+            const existingCard = existingCardsInCategory.get(torrent.hash) || existingCards.get(torrent.hash);
+            
+            if (existingCard) {
+                // Update existing card in place
+                updateTorrentCard(existingCard, torrent);
+                
+                // Move card to correct position if needed
+                const currentContainer = existingCard.closest('.torrents-list');
+                if (currentContainer !== categoryTorrentsContainer) {
+                    // Card is in wrong category, move it
+                    categoryTorrentsContainer.appendChild(existingCard);
+                } else {
+                    // Card is in right category, check position
+                    const currentIndex = Array.from(categoryTorrentsContainer.children).indexOf(existingCard);
+                    if (currentIndex !== index) {
+                        // Move to correct position
+                        const referenceNode = categoryTorrentsContainer.children[index];
+                        if (referenceNode && referenceNode !== existingCard) {
+                            categoryTorrentsContainer.insertBefore(existingCard, referenceNode);
+                        } else if (!referenceNode) {
+                            categoryTorrentsContainer.appendChild(existingCard);
+                        }
+                    }
+                }
+                
+                existingCardsInCategory.delete(torrent.hash);
+            } else {
+                // Create new card
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = renderTorrent(torrent);
+                const newCard = tempDiv.firstElementChild;
+                
+                // Insert at correct position
+                const referenceNode = categoryTorrentsContainer.children[index];
+                if (referenceNode) {
+                    categoryTorrentsContainer.insertBefore(newCard, referenceNode);
+                } else {
+                    categoryTorrentsContainer.appendChild(newCard);
+                }
+                
+                existingCards.set(torrent.hash, newCard);
+            }
+        });
+        
+        // Remove cards that are no longer in this category
+        existingCardsInCategory.forEach((card) => {
+            card.remove();
+            existingCards.delete(card.dataset.hash);
+        });
     });
     
     updateStats(torrents);
