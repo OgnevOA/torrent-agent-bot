@@ -15,25 +15,28 @@
     --accent-indigo: #5856D6;
 
     /* Glassmorphism backgrounds */
-    --bg-glass: rgba(30, 30, 30, 0.65);
-    --bg-glass-heavy: rgba(20, 20, 20, 0.85);
-    --bg-glass-light: rgba(255, 255, 255, 0.1);
+    --bg-glass: rgba(255, 255, 255, 0.08);
+    --bg-glass-heavy: rgba(20, 20, 20, 0.75);
+    --bg-glass-light: rgba(255, 255, 255, 0.15);
+    --bg-glass-bubble: rgba(255, 255, 255, 0.05);
 
     /* Text colors */
     --text-primary: #FFFFFF;
-    --text-secondary: rgba(255, 255, 255, 0.7);
-    --text-tertiary: rgba(255, 255, 255, 0.45);
+    --text-secondary: rgba(255, 255, 255, 0.85);
+    --text-tertiary: rgba(255, 255, 255, 0.5);
 
     /* Borders and Shadows */
-    --border-light: rgba(255, 255, 255, 0.12);
+    --border-light: rgba(255, 255, 255, 0.15);
+    --border-bubble: rgba(255, 255, 255, 0.25);
     --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.1);
-    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.2);
-    --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.2);
+    --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.4);
+    --shadow-glow: 0 0 20px rgba(255, 255, 255, 0.1);
 
     /* Layout */
     --radius-sm: 12px;
-    --radius-md: 16px;
-    --radius-lg: 24px;
+    --radius-md: 20px;
+    --radius-lg: 32px;
     --header-height: 60px;
 }
 
@@ -43,13 +46,73 @@ body {
     color: var(--text-primary);
     min-height: 100vh;
     overflow-x: hidden;
-    /* Rich gradient background */
-    background-image:
-        radial-gradient(circle at 0% 0%, rgba(88, 86, 214, 0.3) 0%, transparent 50%),
-        radial-gradient(circle at 100% 0%, rgba(0, 122, 255, 0.2) 0%, transparent 50%),
-        radial-gradient(circle at 100% 100%, rgba(52, 199, 89, 0.15) 0%, transparent 50%),
-        radial-gradient(circle at 0% 100%, rgba(175, 82, 222, 0.2) 0%, transparent 50%);
-    background-attachment: fixed;
+    /* Animated rich gradient background */
+    background: linear-gradient(125deg,
+            #000000 0%,
+            #1a1a1a 20%,
+            #0d1b2a 40%,
+            #1b263b 60%,
+            #000000 100%);
+    background-size: 400% 400%;
+    animation: gradientBG 15s ease infinite;
+}
+
+@keyframes gradientBG {
+    0% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+/* Add floating orbs for extra "liquid" feel */
+body::before,
+body::after {
+    content: '';
+    position: fixed;
+    width: 60vw;
+    height: 60vw;
+    border-radius: 50%;
+    filter: blur(80px);
+    z-index: -1;
+    opacity: 0.4;
+    animation: floatOrb 20s infinite ease-in-out;
+}
+
+body::before {
+    background: radial-gradient(circle, var(--accent-blue), transparent 70%);
+    top: -10%;
+    left: -10%;
+    animation-delay: 0s;
+}
+
+body::after {
+    background: radial-gradient(circle, var(--accent-purple), transparent 70%);
+    bottom: -10%;
+    right: -10%;
+    animation-delay: -10s;
+}
+
+@keyframes floatOrb {
+
+    0%,
+    100% {
+        transform: translate(0, 0) scale(1);
+    }
+
+    33% {
+        transform: translate(30px, 50px) scale(1.1);
+    }
+
+    66% {
+        transform: translate(-20px, 20px) scale(0.9);
+    }
 }
 
 .container {
@@ -57,7 +120,6 @@ body {
     margin: 0 auto;
     padding: 20px;
     padding-bottom: 100px;
-    /* Space for bottom navigation if added later, or just breathing room */
 }
 
 /* Glass Header */
@@ -66,20 +128,20 @@ body {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 24px;
-    padding: 16px 20px;
+    padding: 16px 24px;
     background: var(--bg-glass);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(25px) saturate(180%);
+    -webkit-backdrop-filter: blur(25px) saturate(180%);
     border-radius: var(--radius-lg);
     border: 1px solid var(--border-light);
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--shadow-md);
     position: sticky;
     top: 20px;
     z-index: 100;
 }
 
 .header h1 {
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 700;
     letter-spacing: -0.5px;
     background: linear-gradient(135deg, #fff 0%, #e0e0e0 100%);
@@ -94,21 +156,384 @@ body {
     align-items: center;
     gap: 8px;
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--text-secondary);
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(0, 0, 0, 0.3);
     padding: 6px 12px;
     border-radius: 20px;
     border: 1px solid var(--border-light);
+    box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
-/* ... (skipping unchanged lines) ... */
+.refresh-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-green);
+    box-shadow: 0 0 10px var(--accent-green);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+        box-shadow: 0 0 10px var(--accent-green);
+    }
+
+    50% {
+        opacity: 0.6;
+        transform: scale(0.9);
+        box-shadow: 0 0 5px var(--accent-green);
+    }
+}
+
+/* Stats Bar */
+.stats-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.stat-item {
+    background: var(--bg-glass);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.stat-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.stat-item:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-glow);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.stat-item:hover::before {
+    opacity: 1;
+}
+
+.stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.stat-value {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.stat-value.downloading {
+    color: var(--accent-green);
+    text-shadow: 0 0 20px rgba(52, 199, 89, 0.5);
+}
+
+.stat-value.seeding {
+    color: var(--accent-blue);
+    text-shadow: 0 0 20px rgba(0, 122, 255, 0.5);
+}
+
+/* Filter Bar - Modern Pills */
+.filter-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 28px;
+    overflow-x: auto;
+    padding: 4px 4px 12px 4px;
+    /* Extra bottom padding for shadows */
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+
+.filter-bar::-webkit-scrollbar {
+    display: none;
+}
+
+.filter-btn {
+    padding: 10px 24px;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid var(--border-light);
+    border-radius: 30px;
+    /* Full pill shape */
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    white-space: nowrap;
+    flex-shrink: 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.filter-btn::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.1), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.filter-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    color: white;
+}
+
+.filter-btn:hover::after {
+    opacity: 1;
+}
+
+.filter-btn.active {
+    background: var(--accent-blue);
+    color: white;
+    border-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 16px rgba(0, 122, 255, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.filter-btn.active:hover {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 6px 20px rgba(0, 122, 255, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* Torrent Cards - Liquid Bubbles */
+.torrents-container {
+    position: relative;
+    min-height: 200px;
+}
+
+.category-section {
+    margin-bottom: 40px;
+    animation: fadeIn 0.6s ease-out;
+}
+
+.category-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-left: 12px;
+}
+
+.category-title {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text-primary);
+    letter-spacing: -0.5px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.category-count {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.15);
+    padding: 4px 10px;
+    border-radius: 12px;
+    backdrop-filter: blur(5px);
+}
+
+.torrent-card {
+    /* Bubble Effect */
+    background: var(--bg-glass-bubble);
+    backdrop-filter: blur(30px) saturate(200%);
+    -webkit-backdrop-filter: blur(30px) saturate(200%);
+    border: 1px solid var(--border-bubble);
+    border-radius: 28px;
+    /* Smoothed rectangle */
+    padding: 20px;
+    margin-bottom: 20px;
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--shadow-md), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+/* Refraction/Shine Effect */
+.torrent-card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 50% 50%,
+            rgba(255, 255, 255, 0.1) 0%,
+            transparent 60%);
+    transform: rotate(45deg);
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+/* Glossy highlight at top */
+.torrent-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 40%;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.05), transparent);
+    border-radius: 28px 28px 0 0;
+    pointer-events: none;
+}
+
+.torrent-card:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: var(--shadow-lg), 0 0 30px rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.torrent-card.has-metadata {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.torrent-content-wrapper {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.torrent-poster {
+    width: 90px;
+    height: 135px;
+    object-fit: cover;
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    background: #222;
+    flex-shrink: 0;
+    transition: transform 0.3s ease;
+}
+
+.torrent-card:hover .torrent-poster {
+    transform: scale(1.05);
+}
+
+.metadata-content {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 16px;
+}
+
+.torrent-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 10px;
+}
 
 .torrent-name {
-    font-size: 15px;
-    font-weight: 600;
-    line-height: 1.4;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.3;
     color: var(--text-primary);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.torrent-status {
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    padding: 6px 10px;
+    border-radius: 12px;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.torrent-status.downloading {
+    background: linear-gradient(135deg, rgba(52, 199, 89, 0.2), rgba(52, 199, 89, 0.4));
+    color: #4cd964;
+    border: 1px solid rgba(52, 199, 89, 0.3);
+}
+
+.torrent-status.seeding {
+    background: linear-gradient(135deg, rgba(0, 122, 255, 0.2), rgba(0, 122, 255, 0.4));
+    color: #409cff;
+    border: 1px solid rgba(0, 122, 255, 0.3);
+}
+
+.torrent-status.paused {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.torrent-status.error {
+    background: rgba(255, 59, 48, 0.2);
+    color: var(--accent-red);
+    border: 1px solid rgba(255, 59, 48, 0.3);
+}
+
+.metadata-rating {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent-orange);
+    margin-bottom: 6px;
+    text-shadow: 0 0 10px rgba(255, 149, 0, 0.3);
+}
+
+.metadata-genres {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.metadata-description {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    line-height: 1.4;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     line-clamp: 2;
@@ -116,71 +541,28 @@ body {
     overflow: hidden;
 }
 
-.torrent-status {
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    padding: 4px 8px;
-    border-radius: 6px;
-    letter-spacing: 0.5px;
-    white-space: nowrap;
-}
-
-.torrent-status.downloading {
-    background: rgba(52, 199, 89, 0.2);
-    color: var(--accent-green);
-}
-
-.torrent-status.seeding {
-    background: rgba(0, 122, 255, 0.2);
-    color: var(--accent-blue);
-}
-
-.torrent-status.paused {
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--text-secondary);
-}
-
-.torrent-status.error {
-    background: rgba(255, 59, 48, 0.2);
-    color: var(--accent-red);
-}
-
-.metadata-rating {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--accent-orange);
-    margin-bottom: 4px;
-}
-
-.metadata-genres {
-    font-size: 12px;
-    color: var(--text-secondary);
-    margin-bottom: 8px;
-}
-
 /* Progress Bar */
 .progress-container {
     margin-top: auto;
-    padding-top: 12px;
+    padding-top: 16px;
+    position: relative;
 }
 
 .progress-bar-wrapper {
-    height: 6px;
+    height: 8px;
     background: rgba(255, 255, 255, 0.1);
-    border-radius: 3px;
+    border-radius: 4px;
     overflow: hidden;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .progress-bar {
     height: 100%;
     background: linear-gradient(90deg, var(--accent-blue), var(--accent-green));
-    border-radius: 3px;
+    border-radius: 4px;
     position: relative;
+    box-shadow: 0 0 10px rgba(52, 199, 89, 0.4);
 }
 
 .progress-bar::after {
@@ -190,15 +572,9 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
     transform: translateX(-100%);
     animation: shimmer 2s infinite;
-}
-
-@keyframes shimmer {
-    100% {
-        transform: translateX(100%);
-    }
 }
 
 .progress-text {
@@ -206,159 +582,96 @@ body {
     justify-content: space-between;
     font-size: 11px;
     color: var(--text-secondary);
-    font-weight: 500;
+    font-weight: 600;
 }
 
-/* Torrent Info Grid */
+/* Torrent Info Grid - Separators */
 .torrent-info {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid var(--border-light);
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    /* More visible separator */
 }
 
 .info-item {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
 }
 
 .info-label {
     font-size: 10px;
     color: var(--text-tertiary);
     text-transform: uppercase;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: 0.5px;
 }
 
 .info-value {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text-primary);
-    font-weight: 500;
+    font-weight: 600;
 }
 
 /* Context Menu */
 .context-menu {
     position: fixed;
-    background: var(--bg-glass-heavy);
-    backdrop-filter: blur(30px);
-    -webkit-backdrop-filter: blur(30px);
+    background: rgba(30, 30, 30, 0.9);
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
     border: 1px solid var(--border-light);
-    border-radius: 14px;
-    box-shadow: var(--shadow-lg);
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     z-index: 1000;
-    min-width: 200px;
+    min-width: 220px;
     overflow: hidden;
     animation: menuPopup 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-@keyframes menuPopup {
-    from {
-        opacity: 0;
-        transform: scale(0.9);
-    }
-
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
-}
-
 .context-menu-item {
-    padding: 14px 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    color: var(--text-primary);
-    font-size: 15px;
-    cursor: pointer;
-    transition: background 0.2s;
+    padding: 16px 20px;
+    font-size: 16px;
+    font-weight: 500;
 }
 
 .context-menu-item:hover {
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.context-menu-item.danger {
-    color: var(--accent-red);
-}
-
-.context-menu-divider {
-    height: 1px;
-    background: var(--border-light);
-    margin: 0;
+    background: rgba(255, 255, 255, 0.15);
 }
 
 /* Modals */
-.modal-overlay {
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(5px);
-    -webkit-backdrop-filter: blur(5px);
-}
-
 .modal-content {
     background: #1c1c1e;
-    /* Solid dark background for readability */
     border: 1px solid var(--border-light);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg);
-}
-
-.modal-header {
-    border-bottom: 1px solid var(--border-light);
-    padding: 20px;
-}
-
-.modal-header h2 {
-    font-size: 18px;
-    font-weight: 700;
-}
-
-.modal-close {
-    width: 32px;
-    height: 32px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 50%;
-    color: var(--text-secondary);
-}
-
-.modal-close:hover {
-    background: rgba(255, 255, 255, 0.2);
-    color: white;
+    border-radius: 24px;
+    box-shadow: 0 40px 80px rgba(0, 0, 0, 0.6);
 }
 
 .btn {
-    padding: 12px 24px;
-    border-radius: 12px;
+    padding: 14px 28px;
+    border-radius: 16px;
     font-weight: 600;
-    font-size: 15px;
+    font-size: 16px;
+    transition: transform 0.2s;
 }
 
-.btn-secondary {
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--text-primary);
-}
-
-.btn-danger {
-    background: var(--accent-red);
-    color: white;
-    box-shadow: 0 4px 12px rgba(255, 59, 48, 0.3);
+.btn:active {
+    transform: scale(0.96);
 }
 
 /* Loading & Error */
 .loading,
 .empty-state {
-    padding: 60px 20px;
-    text-align: center;
-    color: var(--text-secondary);
+    padding: 80px 20px;
 }
 
 .spinner {
-    border: 3px solid rgba(255, 255, 255, 0.1);
+    border: 4px solid rgba(255, 255, 255, 0.1);
     border-top-color: var(--accent-blue);
-    width: 40px;
-    height: 40px;
+    width: 50px;
+    height: 50px;
 }
 
 /* Responsive */
@@ -368,32 +681,31 @@ body {
     }
 
     .header {
-        padding: 12px 16px;
-        margin-bottom: 20px;
+        padding: 16px;
+        margin-bottom: 24px;
     }
 
     .header h1 {
-        font-size: 18px;
-    }
-
-    .stats-bar {
-        gap: 8px;
-    }
-
-    .stat-item {
-        padding: 12px;
-    }
-
-    .stat-value {
-        font-size: 16px;
+        font-size: 20px;
     }
 
     .torrent-card {
-        padding: 12px;
+        padding: 16px;
+        border-radius: 24px;
     }
 
     .torrent-poster {
-        width: 60px;
-        height: 90px;
+        width: 70px;
+        height: 105px;
+        border-radius: 12px;
+    }
+
+    .filter-btn {
+        padding: 8px 16px;
+        font-size: 13px;
+    }
+
+    .stat-value {
+        font-size: 18px;
     }
 }
