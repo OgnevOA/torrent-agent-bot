@@ -8,6 +8,239 @@ let socket = null;
 let reconnectAttempts = 0;
 const maxReconnectAttempts = 5;
 
+// ============================================================================
+// Enhanced Liquid Glass Effect System
+// ============================================================================
+
+// Check if backdrop-filter: url() is supported
+// Note: Currently only supported in Chromium browsers (Chrome, Edge, Opera)
+const supportsBackdropFilterUrl = (() => {
+    if (typeof CSS === 'undefined' || !CSS.supports) return false;
+    
+    // Check user agent for Chromium browsers
+    const isChromium = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor) ||
+                       /Edg/.test(navigator.userAgent) ||
+                       /OPR/.test(navigator.userAgent);
+    
+    if (!isChromium) return false;
+    
+    // Test if backdrop-filter with url() is supported
+    try {
+        const testEl = document.createElement('div');
+        testEl.style.backdropFilter = 'url(#test)';
+        // In Chromium, the style should be preserved
+        return testEl.style.backdropFilter.includes('url') || 
+               CSS.supports('backdrop-filter', 'url(#test)');
+    } catch (e) {
+        return false;
+    }
+})();
+
+// Liquid Glass Configuration
+const glassConfig = {
+    // Base displacement scale (negative for subtle effect)
+    scale: -180,
+    // Chromatic aberration offsets
+    r: 0,      // Red channel offset
+    g: 10,     // Green channel offset (reference)
+    b: 20,     // Blue channel offset
+    // Blur settings
+    blur: 0.7,
+    // Border settings for displacement map
+    border: 0.07,
+    // Alpha and lightness for center mask
+    alpha: 0.93,
+    lightness: 50,
+    // Blend mode for gradients
+    blend: 'difference'
+};
+
+/**
+ * Generate a dynamic displacement map SVG based on element dimensions
+ * @param {number} width - Element width
+ * @param {number} height - Element height
+ * @param {number} radius - Border radius
+ * @param {Object} config - Configuration object
+ * @returns {string} Data URI of the SVG displacement map
+ */
+function generateDisplacementMap(width, height, radius = 16, config = glassConfig) {
+    const border = Math.min(width, height) * (config.border * 0.5);
+    
+    const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" preserveAspectRatio="none">
+            <defs>
+                <linearGradient id="r" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#000"/>
+                    <stop offset="100%" stop-color="#f00"/>
+                </linearGradient>
+                <linearGradient id="b" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#000"/>
+                    <stop offset="100%" stop-color="#00f"/>
+                </linearGradient>
+            </defs>
+            <!-- Backdrop -->
+            <rect x="0" y="0" width="${width}" height="${height}" fill="black"/>
+            <!-- Red linear gradient -->
+            <rect x="0" y="0" width="${width}" height="${height}" rx="${radius}" fill="url(#r)"/>
+            <!-- Blue linear gradient -->
+            <rect x="0" y="0" width="${width}" height="${height}" rx="${radius}" fill="url(#b)" style="mix-blend-mode: ${config.blend}"/>
+            <!-- Block out distortion in center -->
+            <rect x="${border}" y="${border}" width="${width - border * 2}" height="${height - border * 2}" rx="${radius}" 
+                  fill="hsl(0 0% ${config.lightness}% / ${config.alpha})" style="filter:blur(${config.blur * 10}px)"/>
+        </svg>
+    `.trim();
+    
+    const encoded = encodeURIComponent(svg);
+    return `data:image/svg+xml;charset=utf-8,${encoded}`;
+}
+
+/**
+ * Update the displacement map for an element
+ * @param {HTMLElement} element - Target element
+ * @param {string} filterId - Filter ID to use (default: 'liquid-glass')
+ */
+function updateElementDisplacementMap(element, filterId = 'liquid-glass') {
+    if (!supportsBackdropFilterUrl) return;
+    
+    const rect = element.getBoundingClientRect();
+    const computedStyle = window.getComputedStyle(element);
+    const borderRadius = parseInt(computedStyle.borderRadius) || 16;
+    
+    const width = Math.max(rect.width, 200);
+    const height = Math.max(rect.height, 100);
+    
+    const displacementMapUri = generateDisplacementMap(width, height, borderRadius, glassConfig);
+    
+    // Update the feImage element
+    const feImage = document.getElementById('glass-displacement-map');
+    if (feImage) {
+        feImage.setAttribute('href', displacementMapUri);
+    }
+}
+
+/**
+ * Update filter channel scales for chromatic aberration
+ * @param {Object} config - Configuration object with scale and channel offsets
+ */
+function updateFilterChannels(config = glassConfig) {
+    const redChannel = document.getElementById('redchannel');
+    const greenChannel = document.getElementById('greenchannel');
+    const blueChannel = document.getElementById('bluechannel');
+    const blurFilter = document.querySelector('#liquid-glass feGaussianBlur');
+    
+    if (redChannel) {
+        redChannel.setAttribute('scale', config.scale + config.r);
+    }
+    if (greenChannel) {
+        greenChannel.setAttribute('scale', config.scale + config.g);
+    }
+    if (blueChannel) {
+        blueChannel.setAttribute('scale', config.scale + config.b);
+    }
+    if (blurFilter) {
+        blurFilter.setAttribute('stdDeviation', config.blur);
+    }
+}
+
+/**
+ * Initialize liquid glass effect for an element
+ * @param {HTMLElement} element - Target element
+ * @param {Object} options - Options object
+ */
+function initLiquidGlass(element, options = {}) {
+    if (!supportsBackdropFilterUrl) {
+        // Fallback: use simple backdrop-filter
+        element.classList.add('glass-fallback');
+        return;
+    }
+    
+    // Update displacement map on resize
+    const resizeObserver = new ResizeObserver(() => {
+        updateElementDisplacementMap(element);
+    });
+    resizeObserver.observe(element);
+    
+    // Initial update
+    updateElementDisplacementMap(element);
+    
+    // Store observer for cleanup if needed
+    element._glassObserver = resizeObserver;
+}
+
+/**
+ * Initialize liquid glass effects for all elements with the class
+ */
+function initAllLiquidGlass() {
+    if (!supportsBackdropFilterUrl) {
+        // Add fallback class to body for CSS fallback
+        document.body.classList.add('glass-fallback-mode');
+        console.log('Liquid glass: Using fallback mode (backdrop-filter: url() not supported)');
+        return;
+    }
+    
+    console.log('Liquid glass: Enhanced mode enabled with RGB channel separation');
+    
+    // Initialize filter channels
+    updateFilterChannels(glassConfig);
+    
+    // Initialize elements with liquid glass class
+    const glassElements = document.querySelectorAll('.liquid-glass');
+    glassElements.forEach(el => initLiquidGlass(el));
+    
+    // Initialize header
+    const header = document.querySelector('.header');
+    if (header) {
+        initLiquidGlass(header);
+    }
+    
+    // Initialize existing stat items and filter buttons
+    document.querySelectorAll('.stat-item, .filter-btn').forEach(el => {
+        initLiquidGlass(el);
+    });
+    
+    // Initialize existing torrent cards
+    document.querySelectorAll('.torrent-card').forEach(el => {
+        initLiquidGlass(el);
+    });
+    
+    // Initialize modals and context menus when they're created/shown
+    const modalObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                if (node.nodeType === 1) { // Element node
+                    // Check if node itself is a modal/context menu
+                    if (node.classList && (node.classList.contains('modal-content') || 
+                        node.classList.contains('context-menu') ||
+                        node.classList.contains('torrent-card'))) {
+                        initLiquidGlass(node);
+                    }
+                    // Check for nested modals
+                    const modals = node.querySelectorAll ? node.querySelectorAll('.modal-content, .context-menu, .torrent-card') : [];
+                    modals.forEach(modal => initLiquidGlass(modal));
+                }
+            });
+        });
+    });
+    
+    modalObserver.observe(document.body, { childList: true, subtree: true });
+    
+    // Also initialize when modals are shown (for existing modals)
+    const originalShowFileModal = window.showFileModal;
+    if (originalShowFileModal) {
+        window.showFileModal = function(...args) {
+            const result = originalShowFileModal.apply(this, args);
+            setTimeout(() => {
+                const modal = document.getElementById('fileModal');
+                if (modal) {
+                    const modalContent = modal.querySelector('.modal-content');
+                    if (modalContent) initLiquidGlass(modalContent);
+                }
+            }, 100);
+            return result;
+        };
+    }
+}
+
 // Format bytes to human-readable format
 function formatBytes(bytes) {
     if (bytes === 0) return '0 B';
@@ -512,6 +745,11 @@ function updateTorrentsList(torrents) {
                 tempDiv.innerHTML = renderTorrent(torrent);
                 const newCard = tempDiv.firstElementChild;
                 
+                // Initialize liquid glass effect for new card
+                if (supportsBackdropFilterUrl) {
+                    initLiquidGlass(newCard);
+                }
+                
                 // Insert at correct position
                 const referenceNode = categoryTorrentsContainer.children[index];
                 if (referenceNode) {
@@ -675,6 +913,7 @@ function connectWebSocket() {
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     initContextMenu();
+    initAllLiquidGlass(); // Initialize liquid glass effects
     connectWebSocket();
     
     // Reconnect when page becomes visible
@@ -1008,6 +1247,14 @@ async function showFileModal(hash) {
     const title = document.getElementById('fileModalTitle');
     
     modal.style.display = 'flex';
+    
+    // Initialize liquid glass for modal content
+    if (supportsBackdropFilterUrl) {
+        const modalContent = modal.querySelector('.modal-content');
+        if (modalContent) {
+            initLiquidGlass(modalContent);
+        }
+    }
     fileList.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading files...</p></div>';
     
     try {
@@ -1135,8 +1382,17 @@ async function setFilePriority(fileId, priority) {
 
 function showDeleteModal(hash) {
     currentTorrentHash = hash;
-    document.getElementById('deleteModal').style.display = 'flex';
+    const deleteModal = document.getElementById('deleteModal');
+    deleteModal.style.display = 'flex';
     document.getElementById('deleteFiles').checked = false;
+    
+    // Initialize liquid glass for modal content
+    if (supportsBackdropFilterUrl) {
+        const modalContent = deleteModal.querySelector('.modal-content');
+        if (modalContent) {
+            initLiquidGlass(modalContent);
+        }
+    }
 }
 
 function closeDeleteModal() {

@@ -12,14 +12,79 @@
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
 <body>
-    <!-- Liquid Glass Filter Definition -->
+    <!-- Enhanced Liquid Glass Filter Definition with RGB Channel Separation -->
     <svg style="position: absolute; width: 0; height: 0; overflow: hidden;" aria-hidden="true">
         <defs>
             <filter id="liquid-glass" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
-                <feImage result="map" href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient id='r' x1='0' x2='1' y1='0' y2='0'%3E%3Cstop offset='0' stop-color='%23000'/%3E%3Cstop offset='1' stop-color='%23f00'/%3E%3C/linearGradient%3E%3ClinearGradient id='b' x1='0' x2='0' y1='0' y2='1'%3E%3Cstop offset='0' stop-color='%23000'/%3E%3Cstop offset='1' stop-color='%2300f'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23r)'/%3E%3Crect width='100%25' height='100%25' fill='url(%23b)' style='mix-blend-mode:difference'/%3E%3C/svg%3E" />
-                <feDisplacementMap in="SourceGraphic" in2="map" scale="20" xChannelSelector="R" yChannelSelector="B" result="displaced" />
-                <feGaussianBlur in="displaced" stdDeviation="0.5" result="blurred" />
-                <feComposite operator="in" in="blurred" in2="SourceGraphic" result="composite" />
+                <!-- Dynamic displacement map will be injected here via JavaScript -->
+                <feImage id="glass-displacement-map" result="map" href="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' preserveAspectRatio='none'%3E%3Cdefs%3E%3ClinearGradient id='r' x1='0' x2='1' y1='0' y2='0'%3E%3Cstop offset='0' stop-color='%23000'/%3E%3Cstop offset='1' stop-color='%23f00'/%3E%3C/linearGradient%3E%3ClinearGradient id='b' x1='0' x2='0' y1='0' y2='1'%3E%3Cstop offset='0' stop-color='%23000'/%3E%3Cstop offset='1' stop-color='%2300f'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23r)'/%3E%3Crect width='100%25' height='100%25' fill='url(%23b)' style='mix-blend-mode:difference'/%3E%3C/svg%3E" />
+                
+                <!-- RED channel with strongest displacement -->
+                <feDisplacementMap
+                    id="redchannel"
+                    in="SourceGraphic"
+                    in2="map"
+                    scale="-180"
+                    xChannelSelector="R"
+                    yChannelSelector="G"
+                    result="dispRed"
+                />
+                <feColorMatrix
+                    in="dispRed"
+                    type="matrix"
+                    values="1 0 0 0 0
+                            0 0 0 0 0
+                            0 0 0 0 0
+                            0 0 0 1 0"
+                    result="red"
+                />
+                
+                <!-- GREEN channel (reference / least displaced) -->
+                <feDisplacementMap
+                    id="greenchannel"
+                    in="SourceGraphic"
+                    in2="map"
+                    scale="-170"
+                    xChannelSelector="R"
+                    yChannelSelector="G"
+                    result="dispGreen"
+                />
+                <feColorMatrix
+                    in="dispGreen"
+                    type="matrix"
+                    values="0 0 0 0 0
+                            0 1 0 0 0
+                            0 0 0 0 0
+                            0 0 0 1 0"
+                    result="green"
+                />
+                
+                <!-- BLUE channel with medium displacement -->
+                <feDisplacementMap
+                    id="bluechannel"
+                    in="SourceGraphic"
+                    in2="map"
+                    scale="-160"
+                    xChannelSelector="R"
+                    yChannelSelector="G"
+                    result="dispBlue"
+                />
+                <feColorMatrix
+                    in="dispBlue"
+                    type="matrix"
+                    values="0 0 0 0 0
+                            0 0 0 0 0
+                            0 0 1 0 0
+                            0 0 0 1 0"
+                    result="blue"
+                />
+                
+                <!-- Blend channels back together -->
+                <feBlend in="red" in2="green" mode="screen" result="rg" />
+                <feBlend in="rg" in2="blue" mode="screen" result="output" />
+                
+                <!-- Final blur for smoothness -->
+                <feGaussianBlur in="output" stdDeviation="0.7" />
             </filter>
         </defs>
     </svg>
