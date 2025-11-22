@@ -21,7 +21,7 @@ from src.metadata.ai_parser import extract_title_with_ai
 logger = logging.getLogger(__name__)
 
 # Application version - update this when making changes
-APP_VERSION = "1.1.2"
+APP_VERSION = "1.1.3"
 
 # Initialize metadata services (lazy initialization)
 _metadata_cache = None
