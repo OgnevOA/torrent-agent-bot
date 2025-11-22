@@ -70,68 +70,75 @@ function renderTorrent(torrent) {
     const progress = Math.min(100, Math.max(0, torrent.progress));
     const metadata = torrent.metadata || null;
     
-    // Build metadata section if available
-    let metadataSection = '';
+    // Build metadata elements
+    let posterHtml = '';
+    let metadataContentHtml = '';
+    
     if (metadata) {
-        const poster = metadata.poster_url ? `<img src="${escapeHtml(metadata.poster_url)}" alt="Poster" class="torrent-poster" onerror="this.style.display='none'">` : '';
+        if (metadata.poster_url) {
+            posterHtml = `<img src="${escapeHtml(metadata.poster_url)}" alt="Poster" class="torrent-poster" onerror="this.style.display='none'">`;
+        }
+        
         const rating = metadata.rating ? `<div class="metadata-rating">⭐ ${metadata.rating.toFixed(1)}</div>` : '';
         const genres = metadata.genres && metadata.genres.length > 0 ? `<div class="metadata-genres">${metadata.genres.slice(0, 3).join(', ')}</div>` : '';
         const description = metadata.description ? `<div class="metadata-description">${escapeHtml(metadata.description.length > 150 ? metadata.description.substring(0, 150) + '...' : metadata.description)}</div>` : '';
         
-        metadataSection = `
-            <div class="torrent-metadata">
-                ${poster}
+        if (rating || genres || description) {
+            metadataContentHtml = `
                 <div class="metadata-content">
                     ${rating}
                     ${genres}
                     ${description}
                 </div>
-            </div>
-        `;
+            `;
+        }
     }
     
     return `
         <div class="torrent-card ${metadata ? 'has-metadata' : ''}" data-hash="${escapeHtml(torrent.hash)}" ontouchstart="handleTorrentTouchStart(event, '${escapeHtml(torrent.hash)}', '${escapeHtml(torrent.state)}')" ontouchend="handleTorrentTouchEnd(event)" onclick="handleTorrentClick(event, '${escapeHtml(torrent.hash)}', '${escapeHtml(torrent.state)}')">
-            <div class="torrent-header">
-                <div class="torrent-name">${escapeHtml(torrent.name)}</div>
-                <div class="torrent-status ${statusInfo.class}">
-                    ${statusInfo.emoji} ${torrent.state}
+            ${posterHtml}
+            <div class="torrent-content-wrapper">
+                <div class="torrent-header">
+                    <div class="torrent-name">${escapeHtml(torrent.name)}</div>
+                    <div class="torrent-status ${statusInfo.class}">
+                        ${statusInfo.emoji} ${torrent.state}
+                    </div>
                 </div>
-            </div>
-            ${metadataSection}
-            <div class="progress-container">
-                <div class="progress-bar-wrapper">
-                    <div class="progress-bar" style="width: ${progress}%"></div>
+                ${metadataContentHtml}
+                <div class="progress-container">
+                    <div class="progress-bar-wrapper">
+                        <div class="progress-bar" style="width: ${progress}%"></div>
+                    </div>
+                    <div class="progress-text">
+                        <span>${progress.toFixed(1)}%</span>
+                        <span>${formatBytes(torrent.size)}</span>
+                    </div>
                 </div>
-                <div class="progress-text">
-                    <span>${progress.toFixed(1)}%</span>
-                    <span>${formatBytes(torrent.size)}</span>
-                </div>
-            </div>
-            <div class="torrent-info">
-                <div class="info-item">
-                    <span class="info-label">Status</span>
-                    <span class="info-value">${torrent.state}</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Seeds</span>
-                    <span class="info-value ${torrent.seeds > 0 ? 'highlight' : ''}">${torrent.seeds}</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Peers</span>
-                    <span class="info-value">${torrent.peers}</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Down Speed</span>
-                    <span class="info-value ${torrent.dlspeed > 0 ? 'highlight' : ''}">${formatSpeed(torrent.dlspeed)}</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Up Speed</span>
-                    <span class="info-value">${formatSpeed(torrent.upspeed)}</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">ETA</span>
-                    <span class="info-value ${torrent.eta > 0 && torrent.eta < 3600 ? 'warning' : ''}">${formatETA(torrent.eta)}</span>
+                <div class="torrent-info">
+                    <div class="info-item">
+                        <span class="info-label">Status</span>
+                        <span class="info-value">${torrent.state}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Seeds</span>
+                        <span class="info-value ${torrent.seeds > 0 ? 'highlight' : ''}">${torrent.seeds}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Peers</span>
+                        <span class="info-value">${torrent.peers}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Down Speed</span>
+                        <span class="info-value ${torrent.dlspeed > 0 ? 'highlight' : ''}">${formatSpeed(torrent.dlspeed)}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Up Speed</span>
+                        <span class="info-value">${formatSpeed(torrent.upspeed)}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">ETA</span>
+                        <span class="info-value ${torrent.eta > 0 && torrent.eta < 3600 ? 'warning' : ''}">${formatETA(torrent.eta)}</span>
+                    </div>
                 </div>
             </div>
         </div>
