@@ -139,20 +139,9 @@ body::after {
     overflow: hidden;
     transform: translateZ(0);
     
-    /* Enhanced liquid glass effect with RGB channel separation */
-    backdrop-filter: url(#liquid-glass) saturate(180%) blur(20px);
-    -webkit-backdrop-filter: url(#liquid-glass) saturate(180%) blur(20px);
-    
-    /* Fallback for browsers without backdrop-filter: url() support */
-    filter: url(#liquid-glass);
-}
-
-/* Fallback mode: simpler backdrop-filter without displacement */
-.glass-fallback-mode .header,
-.glass-fallback .header {
+    /* Simple backdrop-filter (performance optimized) */
     backdrop-filter: saturate(180%) blur(30px);
     -webkit-backdrop-filter: saturate(180%) blur(30px);
-    filter: none;
 }
 
 /* Header Shine Effect */
@@ -256,18 +245,9 @@ body::after {
     position: relative;
     overflow: hidden;
     
-    /* Subtle liquid glass effect for stats */
-    backdrop-filter: url(#liquid-glass) blur(20px);
-    -webkit-backdrop-filter: url(#liquid-glass) blur(20px);
-    filter: url(#liquid-glass);
-}
-
-/* Fallback for stat items */
-.glass-fallback-mode .stat-item,
-.glass-fallback .stat-item {
+    /* Simple backdrop-filter (performance optimized) */
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    filter: none;
 }
 
 .stat-item::before {
@@ -349,18 +329,9 @@ body::after {
     position: relative;
     overflow: hidden;
     
-    /* Subtle liquid glass effect for filter buttons */
-    backdrop-filter: url(#liquid-glass) blur(15px);
-    -webkit-backdrop-filter: url(#liquid-glass) blur(15px);
-    filter: url(#liquid-glass);
-}
-
-/* Fallback for filter buttons */
-.glass-fallback-mode .filter-btn,
-.glass-fallback .filter-btn {
+    /* Simple backdrop-filter (performance optimized) */
     backdrop-filter: blur(15px);
     -webkit-backdrop-filter: blur(15px);
-    filter: none;
 }
 
 .filter-btn::after {
@@ -437,7 +408,7 @@ body::after {
 }
 
 .torrent-card {
-    /* Bubble Effect with Enhanced Liquid Glass */
+    /* Bubble Effect */
     background: var(--bg-glass-bubble);
     border: 1px solid var(--border-bubble);
     border-radius: 28px;
@@ -448,18 +419,9 @@ body::after {
     overflow: hidden;
     box-shadow: var(--shadow-md), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
     
-    /* Enhanced liquid glass effect */
-    backdrop-filter: url(#liquid-glass) blur(30px) saturate(200%);
-    -webkit-backdrop-filter: url(#liquid-glass) blur(30px) saturate(200%);
-    filter: url(#liquid-glass);
-}
-
-/* Fallback for torrent cards */
-.glass-fallback-mode .torrent-card,
-.glass-fallback .torrent-card {
+    /* Simple backdrop-filter (performance optimized) */
     backdrop-filter: blur(30px) saturate(200%);
     -webkit-backdrop-filter: blur(30px) saturate(200%);
-    filter: none;
 }
 
 /* Refraction/Shine Effect */
@@ -704,18 +666,9 @@ body::after {
     overflow: hidden;
     animation: menuPopup 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     
-    /* Enhanced liquid glass effect */
-    backdrop-filter: url(#liquid-glass) blur(40px) saturate(180%);
-    -webkit-backdrop-filter: url(#liquid-glass) blur(40px) saturate(180%);
-    filter: url(#liquid-glass);
-}
-
-/* Fallback for context menu */
-.glass-fallback-mode .context-menu,
-.glass-fallback .context-menu {
+    /* Simple backdrop-filter (performance optimized) */
     backdrop-filter: blur(40px) saturate(180%);
     -webkit-backdrop-filter: blur(40px) saturate(180%);
-    filter: none;
 }
 
 .context-menu-item {
@@ -760,18 +713,9 @@ body::after {
     overflow: hidden;
     animation: scaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     
-    /* Enhanced liquid glass effect */
-    backdrop-filter: url(#liquid-glass) blur(30px) saturate(150%);
-    -webkit-backdrop-filter: url(#liquid-glass) blur(30px) saturate(150%);
-    filter: url(#liquid-glass);
-}
-
-/* Fallback for modals */
-.glass-fallback-mode .modal-content,
-.glass-fallback .modal-content {
+    /* Simple backdrop-filter (performance optimized) */
     backdrop-filter: blur(30px) saturate(150%);
     -webkit-backdrop-filter: blur(30px) saturate(150%);
-    filter: none;
 }
 
 @keyframes scaleUp {
