@@ -177,6 +177,122 @@ class TMDBClient:
         else:
             return self.search_movie(title, year)
     
+    def get_season_metadata(self, tv_id: int, season_number: int, show_title: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Get metadata for a specific TV season.
+        
+        Args:
+            tv_id: TMDB TV show ID
+            season_number: Season number (1-indexed)
+            show_title: Optional show title for context
+            
+        Returns:
+            Season metadata dict or None if not found
+        """
+        if not self.enabled:
+            return None
+        
+        try:
+            season_data = self.tv.season(tv_id, season_number)
+            if not season_data:
+                return None
+            
+            season_dict = self._to_dict(season_data)
+            
+            # Extract season poster
+            poster_path = season_dict.get('poster_path') or ''
+            poster_url = None
+            if poster_path:
+                poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}"
+            
+            # If no season poster, try to get show poster as fallback
+            if not poster_url and show_title:
+                try:
+                    show_metadata = self.search_tv_show(show_title)
+                    if show_metadata:
+                        poster_url = show_metadata.get('poster_url')
+                except Exception:
+                    pass
+            
+            return {
+                'poster_url': poster_url,
+                'title': show_title or season_dict.get('name', ''),
+                'description': season_dict.get('overview', ''),
+                'rating': season_dict.get('vote_average', 0.0),
+                'genres': [],  # Seasons don't have genres, use show genres if needed
+                'year': None,  # Could extract from air_date if needed
+                'media_type': 'tv',
+                'season': season_number,
+                'episode': None,
+                'tmdb_id': tv_id
+            }
+        except Exception as e:
+            logger.debug(f"Error fetching season metadata for TV ID {tv_id}, season {season_number}: {e}", exc_info=True)
+            return None
+    
+    def get_episode_metadata(self, tv_id: int, season_number: int, episode_number: int, show_title: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Get metadata for a specific TV episode.
+        
+        Args:
+            tv_id: TMDB TV show ID
+            season_number: Season number (1-indexed)
+            episode_number: Episode number (1-indexed)
+            show_title: Optional show title for context
+            
+        Returns:
+            Episode metadata dict or None if not found
+        """
+        if not self.enabled:
+            return None
+        
+        try:
+            episode_data = self.tv.episode(tv_id, season_number, episode_number)
+            if not episode_data:
+                return None
+            
+            episode_dict = self._to_dict(episode_data)
+            
+            # Extract episode still
+            still_path = episode_dict.get('still_path') or ''
+            poster_url = None
+            if still_path:
+                poster_url = f"https://image.tmdb.org/t/p/w500{still_path}"
+            
+            # Fallback to season poster if episode still not available
+            if not poster_url:
+                try:
+                    season_metadata = self.get_season_metadata(tv_id, season_number, show_title)
+                    if season_metadata:
+                        poster_url = season_metadata.get('poster_url')
+                except Exception:
+                    pass
+            
+            # Fallback to show poster if still no poster
+            if not poster_url and show_title:
+                try:
+                    show_metadata = self.search_tv_show(show_title)
+                    if show_metadata:
+                        poster_url = show_metadata.get('poster_url')
+                except Exception:
+                    pass
+            
+            return {
+                'poster_url': poster_url,
+                'title': show_title or episode_dict.get('name', ''),
+                'description': episode_dict.get('overview', ''),
+                'rating': episode_dict.get('vote_average', 0.0),
+                'genres': [],  # Episodes don't have genres
+                'year': None,  # Could extract from air_date if needed
+                'media_type': 'tv',
+                'season': season_number,
+                'episode': episode_number,
+                'tmdb_id': tv_id
+            }
+        except Exception as e:
+            logger.debug(f"Error fetching episode metadata for TV ID {tv_id}, S{season_number}E{episode_number}: {e}", exc_info=True)
+            return None
+    
     def _to_dict(self, obj: Any) -> Dict[str, Any]:
         """
         Convert a TMDB object to a dictionary.

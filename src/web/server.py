@@ -56,6 +56,11 @@ def get_torrent_metadata(torrent_name: str, torrent_hash: Optional[str] = None) 
     """
     Get metadata for a torrent by parsing its name and looking up in TMDB.
     
+    For TV shows:
+    - If season is present but episode is None: returns season metadata (fallback to show)
+    - If both season and episode are present: returns episode metadata (fallback to season, then show)
+    - Otherwise: returns show-level metadata
+    
     Args:
         torrent_name: Name of the torrent
         torrent_hash: Optional torrent hash for AI caching
@@ -75,6 +80,8 @@ def get_torrent_metadata(torrent_name: str, torrent_hash: Optional[str] = None) 
     parsed = parse_torrent_title(torrent_name)
     title = parsed.get('title', '').strip()
     media_type = parsed.get('media_type', 'movie')
+    season = parsed.get('season')
+    episode = parsed.get('episode')
     
     if not title:
         logger.debug(f"Could not extract title from: {torrent_name}, trying AI fallback")
@@ -86,22 +93,107 @@ def get_torrent_metadata(torrent_name: str, torrent_hash: Optional[str] = None) 
             parsed['year'] = ai_parsed.get('year')
             parsed['season'] = ai_parsed.get('season')
             parsed['episode'] = ai_parsed.get('episode')
+            season = parsed.get('season')
+            episode = parsed.get('episode')
             logger.debug(f"AI extracted title: '{title}' (type: {media_type})")
         
         if not title:
             logger.debug(f"Could not extract title even with AI: {torrent_name}")
             return None
     
-    logger.debug(f"Parsed '{torrent_name}' -> title: '{title}', type: {media_type}, season: {parsed.get('season')}")
+    logger.debug(f"Parsed '{torrent_name}' -> title: '{title}', type: {media_type}, season: {season}, episode: {episode}")
     
-    # Check cache first
+    # Check cache first (with season/episode if applicable)
     cache = get_metadata_cache()
-    cached = cache.get(title, parsed.get('year'))
+    cached = cache.get(title, parsed.get('year'), season, episode)
     if cached:
-        logger.debug(f"Found cached metadata for: {title}")
+        logger.debug(f"Found cached metadata for: {title} (season: {season}, episode: {episode})")
         return cached
     
-    # Look up in TMDB
+    # Handle TV shows with season/episode info
+    if media_type == 'tv' and season is not None:
+        try:
+            # First, get the TV show to obtain its ID
+            show_metadata = tmdb.search_tv_show(title)
+            if not show_metadata:
+                logger.debug(f"TV show not found: {title}")
+                # Try AI fallback for better title extraction
+                ai_parsed = extract_title_with_ai(torrent_name, torrent_hash=torrent_hash)
+                if ai_parsed:
+                    ai_title = ai_parsed.get('title', '').strip()
+                    if ai_title and ai_title.lower() != title.lower():
+                        logger.debug(f"Trying AI-extracted title: '{ai_title}'")
+                        show_metadata = tmdb.search_tv_show(ai_title)
+                        if show_metadata:
+                            title = ai_title
+            
+            if not show_metadata:
+                logger.debug(f"No TV show metadata found for: {title}")
+                return None
+            
+            tv_id = show_metadata.get('tmdb_id')
+            show_title = show_metadata.get('title', title)
+            
+            if not tv_id:
+                logger.debug(f"No TV ID found in show metadata for: {title}")
+                # Fallback to show-level metadata
+                cache.set(title, show_metadata, parsed.get('year'), season, episode)
+                return show_metadata
+            
+            # Case 1: Whole season torrent (season present, episode None)
+            if episode is None:
+                logger.debug(f"Fetching season metadata for: {title} S{season}")
+                season_metadata = tmdb.get_season_metadata(tv_id, season, show_title)
+                
+                if season_metadata:
+                    # Cache and return season metadata
+                    cache.set(title, season_metadata, parsed.get('year'), season, episode)
+                    logger.debug(f"Successfully fetched season metadata for: {title} S{season}")
+                    return season_metadata
+                else:
+                    # Fallback to show-level metadata
+                    logger.debug(f"Season metadata not found, falling back to show metadata for: {title}")
+                    cache.set(title, show_metadata, parsed.get('year'), season, episode)
+                    return show_metadata
+            
+            # Case 2: Single episode torrent (both season and episode present)
+            else:
+                logger.debug(f"Fetching episode metadata for: {title} S{season}E{episode}")
+                episode_metadata = tmdb.get_episode_metadata(tv_id, season, episode, show_title)
+                
+                if episode_metadata:
+                    # Cache and return episode metadata
+                    cache.set(title, episode_metadata, parsed.get('year'), season, episode)
+                    logger.debug(f"Successfully fetched episode metadata for: {title} S{season}E{episode}")
+                    return episode_metadata
+                else:
+                    # Fallback to season metadata
+                    logger.debug(f"Episode metadata not found, trying season metadata for: {title} S{season}")
+                    season_metadata = tmdb.get_season_metadata(tv_id, season, show_title)
+                    
+                    if season_metadata:
+                        cache.set(title, season_metadata, parsed.get('year'), season, episode)
+                        logger.debug(f"Using season metadata as fallback for: {title} S{season}E{episode}")
+                        return season_metadata
+                    else:
+                        # Final fallback to show-level metadata
+                        logger.debug(f"Season metadata not found, falling back to show metadata for: {title}")
+                        cache.set(title, show_metadata, parsed.get('year'), season, episode)
+                        return show_metadata
+        
+        except Exception as e:
+            logger.debug(f"Error fetching TV metadata for '{title}': {e}", exc_info=True)
+            # Try to return show-level metadata if available
+            try:
+                show_metadata = tmdb.search_tv_show(title)
+                if show_metadata:
+                    cache.set(title, show_metadata, parsed.get('year'), season, episode)
+                    return show_metadata
+            except Exception:
+                pass
+            return None
+    
+    # Handle movies or TV shows without season/episode info
     try:
         metadata = tmdb.get_metadata(
             title=title,
@@ -111,7 +203,7 @@ def get_torrent_metadata(torrent_name: str, torrent_hash: Optional[str] = None) 
         
         if metadata:
             # Cache the result
-            cache.set(title, metadata, parsed.get('year'))
+            cache.set(title, metadata, parsed.get('year'), season, episode)
             logger.debug(f"Successfully fetched metadata for: {title} ({media_type})")
             return metadata
         else:
@@ -125,12 +217,14 @@ def get_torrent_metadata(torrent_name: str, torrent_hash: Optional[str] = None) 
                 ai_title = ai_parsed.get('title', '').strip()
                 ai_media_type = ai_parsed.get('media_type', 'movie')
                 ai_year = ai_parsed.get('year')
+                ai_season = ai_parsed.get('season')
+                ai_episode = ai_parsed.get('episode')
                 
                 if ai_title and ai_title.lower() != title.lower():
                     logger.debug(f"AI extracted different title: '{ai_title}' (type: {ai_media_type})")
                     
                     # Check cache for AI-extracted title
-                    cached_ai = cache.get(ai_title, ai_year)
+                    cached_ai = cache.get(ai_title, ai_year, ai_season, ai_episode)
                     if cached_ai:
                         logger.debug(f"Found cached metadata for AI-extracted title: {ai_title}")
                         return cached_ai
@@ -145,7 +239,7 @@ def get_torrent_metadata(torrent_name: str, torrent_hash: Optional[str] = None) 
                         
                         if ai_metadata:
                             # Cache the result
-                            cache.set(ai_title, ai_metadata, ai_year)
+                            cache.set(ai_title, ai_metadata, ai_year, ai_season, ai_episode)
                             logger.debug(f"Successfully fetched metadata using AI-extracted title: {ai_title}")
                             return ai_metadata
                         else:

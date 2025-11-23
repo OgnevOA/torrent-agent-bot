@@ -13,13 +13,15 @@ class MetadataCache:
         """Initialize the cache."""
         self._cache: Dict[str, Dict[str, Any]] = {}
     
-    def _make_key(self, title: str, year: Optional[int] = None) -> str:
+    def _make_key(self, title: str, year: Optional[int] = None, season: Optional[int] = None, episode: Optional[int] = None) -> str:
         """
-        Create a cache key from title and optional year.
+        Create a cache key from title and optional year/season/episode.
         
         Args:
             title: Media title
             year: Optional year
+            season: Optional season number
+            episode: Optional episode number
             
         Returns:
             Cache key string
@@ -27,23 +29,29 @@ class MetadataCache:
         key_string = f"{title.lower().strip()}"
         if year:
             key_string += f"_{year}"
+        if season is not None:
+            key_string += f"_s{season}"
+        if episode is not None:
+            key_string += f"_e{episode}"
         return md5(key_string.encode('utf-8')).hexdigest()
     
-    def get(self, title: str, year: Optional[int] = None) -> Optional[Dict[str, Any]]:
+    def get(self, title: str, year: Optional[int] = None, season: Optional[int] = None, episode: Optional[int] = None) -> Optional[Dict[str, Any]]:
         """
         Get metadata from cache.
         
         Args:
             title: Media title
             year: Optional year
+            season: Optional season number
+            episode: Optional episode number
             
         Returns:
             Cached metadata dict or None if not found
         """
-        key = self._make_key(title, year)
+        key = self._make_key(title, year, season, episode)
         return self._cache.get(key)
     
-    def set(self, title: str, metadata: Dict[str, Any], year: Optional[int] = None) -> None:
+    def set(self, title: str, metadata: Dict[str, Any], year: Optional[int] = None, season: Optional[int] = None, episode: Optional[int] = None) -> None:
         """
         Store metadata in cache.
         
@@ -51,10 +59,19 @@ class MetadataCache:
             title: Media title
             metadata: Metadata dict to cache
             year: Optional year
+            season: Optional season number
+            episode: Optional episode number
         """
-        key = self._make_key(title, year)
+        key = self._make_key(title, year, season, episode)
         self._cache[key] = metadata
-        logger.debug(f"Cached metadata for: {title} (year: {year})")
+        cache_info = f"{title}"
+        if year:
+            cache_info += f" (year: {year})"
+        if season is not None:
+            cache_info += f" (season: {season})"
+        if episode is not None:
+            cache_info += f" (episode: {episode})"
+        logger.debug(f"Cached metadata for: {cache_info}")
     
     def clear(self) -> None:
         """Clear all cached metadata."""
