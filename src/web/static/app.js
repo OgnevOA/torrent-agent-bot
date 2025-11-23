@@ -56,7 +56,7 @@ function getStatusInfo(state) {
         return { emoji: '🟢', class: 'downloading' };
     } else if (['seeding', 'uploading', 'stalledup', 'queuedup'].includes(stateLower)) {
         return { emoji: '🔵', class: 'seeding' };
-    } else if (['paused', 'queueddl', 'stalleddl'].includes(stateLower)) {
+    } else if (['paused', 'queueddl', 'stalleddl', 'stoppedup', 'stoppeddl'].includes(stateLower)) {
         return { emoji: '⚪', class: 'paused' };
     } else if (stateLower === 'error') {
         return { emoji: '🔴', class: 'error' };
@@ -107,26 +107,6 @@ function renderTorrent(torrent) {
         }
     }
     
-    // Determine if pause/resume buttons should be shown
-    const isPaused = ['paused', 'queueddl', 'stalleddl'].includes(torrent.state.toLowerCase());
-    const canPause = !isPaused && ['downloading', 'uploading', 'seeding', 'stalledup', 'queuedup'].includes(torrent.state.toLowerCase());
-    
-    // Build action buttons HTML
-    let actionButtonsHtml = '';
-    if (canPause) {
-        actionButtonsHtml = `
-            <button class="torrent-action-btn pause-btn" onclick="event.stopPropagation(); pauseTorrent('${escapeHtml(torrent.hash)}')" title="Pause">
-                ⏸️ Pause
-            </button>
-        `;
-    } else if (isPaused) {
-        actionButtonsHtml = `
-            <button class="torrent-action-btn resume-btn" onclick="event.stopPropagation(); resumeTorrent('${escapeHtml(torrent.hash)}')" title="Resume">
-                ▶️ Resume
-            </button>
-        `;
-    }
-    
     return `
         <div class="torrent-card ${metadata ? 'has-metadata' : ''}" data-hash="${escapeHtml(torrent.hash)}" ontouchstart="handleTorrentTouchStart(event, '${escapeHtml(torrent.hash)}', '${escapeHtml(torrent.state)}')" ontouchend="handleTorrentTouchEnd(event)" onclick="handleTorrentClick(event, '${escapeHtml(torrent.hash)}', '${escapeHtml(torrent.state)}')">
             ${posterHtml}
@@ -147,7 +127,6 @@ function renderTorrent(torrent) {
                         <span>${formatBytes(torrent.size)}</span>
                     </div>
                 </div>
-                ${actionButtonsHtml ? `<div class="torrent-actions">${actionButtonsHtml}</div>` : ''}
                 <div class="torrent-info">
                     <div class="info-item">
                         <span class="info-label">Status</span>
@@ -312,45 +291,6 @@ function updateTorrentCard(cardElement, torrent) {
     if (currentState !== torrent.state) {
         cardElement.setAttribute('ontouchstart', `handleTorrentTouchStart(event, '${escapeHtml(torrent.hash)}', '${escapeHtml(torrent.state)}')`);
         cardElement.setAttribute('onclick', `handleTorrentClick(event, '${escapeHtml(torrent.hash)}', '${escapeHtml(torrent.state)}')`);
-    }
-    
-    // Update action buttons based on state
-    const isPaused = ['paused', 'queueddl', 'stalleddl'].includes(torrent.state.toLowerCase());
-    const canPause = !isPaused && ['downloading', 'uploading', 'seeding', 'stalledup', 'queuedup'].includes(torrent.state.toLowerCase());
-    
-    let actionsContainer = cardElement.querySelector('.torrent-actions');
-    
-    if (canPause || isPaused) {
-        if (!actionsContainer) {
-            // Create actions container if it doesn't exist
-            const progressContainer = cardElement.querySelector('.progress-container');
-            if (progressContainer) {
-                actionsContainer = document.createElement('div');
-                actionsContainer.className = 'torrent-actions';
-                progressContainer.parentNode.insertBefore(actionsContainer, progressContainer.nextSibling);
-            }
-        }
-        
-        if (actionsContainer) {
-            if (canPause) {
-                actionsContainer.innerHTML = `
-                    <button class="torrent-action-btn pause-btn" onclick="event.stopPropagation(); pauseTorrent('${escapeHtml(torrent.hash)}')" title="Pause">
-                        ⏸️ Pause
-                    </button>
-                `;
-            } else if (isPaused) {
-                actionsContainer.innerHTML = `
-                    <button class="torrent-action-btn resume-btn" onclick="event.stopPropagation(); resumeTorrent('${escapeHtml(torrent.hash)}')" title="Resume">
-                        ▶️ Resume
-                    </button>
-                `;
-            }
-        }
-    } else {
-        // Remove actions container if torrent state doesn't support pause/resume
-        if (actionsContainer) {
-            actionsContainer.remove();
-        }
     }
 }
 
@@ -853,7 +793,7 @@ function showContextMenu(event, hash, state) {
     // Show/hide pause/resume based on state
     // Pause is available for active states (downloading, uploading, seeding, etc.)
     // Resume is available for paused states
-    const isPaused = ['paused', 'queueddl', 'stalleddl'].includes(state.toLowerCase());
+    const isPaused = ['paused', 'queueddl', 'stalleddl', 'stoppedup', 'stoppeddl'].includes(state.toLowerCase());
     const canPause = !isPaused && ['downloading', 'uploading', 'seeding', 'stalledup', 'queuedup'].includes(state.toLowerCase());
     
     pauseItem.style.display = canPause ? 'flex' : 'none';

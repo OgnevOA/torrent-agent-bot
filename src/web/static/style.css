@@ -586,64 +586,6 @@ body::after {
     position: relative;
 }
 
-/* Torrent Action Buttons */
-.torrent-actions {
-    margin-top: 12px;
-    margin-bottom: 8px;
-    display: flex;
-    gap: 8px;
-}
-
-.torrent-action-btn {
-    flex: 1;
-    padding: 10px 16px;
-    border-radius: 12px;
-    border: 1px solid var(--border-light);
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    background: var(--bg-glass);
-    color: var(--text-primary);
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
-}
-
-.torrent-action-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.torrent-action-btn:active {
-    transform: translateY(0);
-}
-
-.pause-btn {
-    background: linear-gradient(135deg, rgba(255, 149, 0, 0.2), rgba(255, 149, 0, 0.3));
-    border-color: rgba(255, 149, 0, 0.4);
-    color: var(--accent-orange);
-}
-
-.pause-btn:hover {
-    background: linear-gradient(135deg, rgba(255, 149, 0, 0.3), rgba(255, 149, 0, 0.4));
-    box-shadow: 0 4px 16px rgba(255, 149, 0, 0.4);
-}
-
-.resume-btn {
-    background: linear-gradient(135deg, rgba(52, 199, 89, 0.2), rgba(52, 199, 89, 0.3));
-    border-color: rgba(52, 199, 89, 0.4);
-    color: var(--accent-green);
-}
-
-.resume-btn:hover {
-    background: linear-gradient(135deg, rgba(52, 199, 89, 0.3), rgba(52, 199, 89, 0.4));
-    box-shadow: 0 4px 16px rgba(52, 199, 89, 0.4);
-}
-
 .progress-bar-wrapper {
     height: 8px;
     background: rgba(255, 255, 255, 0.1);
@@ -1044,10 +986,5 @@ body::after {
 
     .stat-value {
         font-size: 18px;
-    }
-    
-    .torrent-action-btn {
-        padding: 8px 12px;
-        font-size: 13px;
     }
 }
