@@ -1,5 +1,6 @@
 """TMDB API client for fetching movie and TV show metadata."""
 import logging
+import requests
 from typing import Optional, Dict, Any, List
 
 logger = logging.getLogger(__name__)
@@ -193,11 +194,32 @@ class TMDBClient:
             return None
         
         try:
-            season_data = self.tv.season(tv_id, season_number)
-            if not season_data:
-                return None
+            logger.info(f"🔍 Calling TMDB API: tv.season({tv_id}, {season_number})")
+            # Try to call the season method - it might be named differently in different versions
+            if not hasattr(self.tv, 'season'):
+                logger.warning(f"⚠️ TV.season() method not found, trying direct API call")
+                logger.debug(f"Available TV methods: {[m for m in dir(self.tv) if not m.startswith('_')]}")
+                # Fallback to direct API call
+                try:
+                    url = f"https://api.themoviedb.org/3/tv/{tv_id}/season/{season_number}"
+                    params = {'api_key': self.api_key, 'language': 'en'}
+                    response = requests.get(url, params=params, timeout=10)
+                    response.raise_for_status()
+                    season_dict = response.json()
+                    logger.info(f"📥 Season data received via direct API call")
+                except Exception as api_error:
+                    logger.error(f"❌ Direct API call also failed: {api_error}")
+                    return None
+            else:
+                season_data = self.tv.season(tv_id, season_number)
+                logger.info(f"📥 Season data received: {type(season_data)}")
+                if not season_data:
+                    logger.warning(f"⚠️ No season data returned from TMDB for TV ID {tv_id}, season {season_number}")
+                    return None
+                season_dict = self._to_dict(season_data)
             
-            season_dict = self._to_dict(season_data)
+            if 'season_dict' not in locals():
+                season_dict = self._to_dict(season_data)
             
             # Extract season poster
             poster_path = season_dict.get('poster_path') or ''
@@ -247,11 +269,29 @@ class TMDBClient:
             return None
         
         try:
-            episode_data = self.tv.episode(tv_id, season_number, episode_number)
-            if not episode_data:
-                return None
-            
-            episode_dict = self._to_dict(episode_data)
+            logger.info(f"🔍 Calling TMDB API: tv.episode({tv_id}, {season_number}, {episode_number})")
+            # Try to call the episode method - it might be named differently in different versions
+            if not hasattr(self.tv, 'episode'):
+                logger.warning(f"⚠️ TV.episode() method not found, trying direct API call")
+                logger.debug(f"Available TV methods: {[m for m in dir(self.tv) if not m.startswith('_')]}")
+                # Fallback to direct API call
+                try:
+                    url = f"https://api.themoviedb.org/3/tv/{tv_id}/season/{season_number}/episode/{episode_number}"
+                    params = {'api_key': self.api_key, 'language': 'en'}
+                    response = requests.get(url, params=params, timeout=10)
+                    response.raise_for_status()
+                    episode_dict = response.json()
+                    logger.info(f"📥 Episode data received via direct API call")
+                except Exception as api_error:
+                    logger.error(f"❌ Direct API call also failed: {api_error}")
+                    return None
+            else:
+                episode_data = self.tv.episode(tv_id, season_number, episode_number)
+                logger.info(f"📥 Episode data received: {type(episode_data)}")
+                if not episode_data:
+                    logger.warning(f"⚠️ No episode data returned from TMDB for TV ID {tv_id}, S{season_number}E{episode_number}")
+                    return None
+                episode_dict = self._to_dict(episode_data)
             
             # Extract episode still
             still_path = episode_dict.get('still_path') or ''

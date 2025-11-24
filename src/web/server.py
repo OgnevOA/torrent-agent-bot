@@ -101,17 +101,18 @@ def get_torrent_metadata(torrent_name: str, torrent_hash: Optional[str] = None) 
             logger.debug(f"Could not extract title even with AI: {torrent_name}")
             return None
     
-    logger.debug(f"Parsed '{torrent_name}' -> title: '{title}', type: {media_type}, season: {season}, episode: {episode}")
+    logger.info(f"🔍 Parsed '{torrent_name}' -> title: '{title}', type: {media_type}, season: {season}, episode: {episode}")
     
     # Check cache first (with season/episode if applicable)
     cache = get_metadata_cache()
     cached = cache.get(title, parsed.get('year'), season, episode)
     if cached:
-        logger.debug(f"Found cached metadata for: {title} (season: {season}, episode: {episode})")
+        logger.info(f"✅ Found cached metadata for: {title} (season: {season}, episode: {episode})")
         return cached
     
     # Handle TV shows with season/episode info
     if media_type == 'tv' and season is not None:
+        logger.info(f"📺 TV show detected with season info: {title}, season={season}, episode={episode}")
         try:
             # First, get the TV show to obtain its ID
             show_metadata = tmdb.search_tv_show(title)
@@ -142,42 +143,48 @@ def get_torrent_metadata(torrent_name: str, torrent_hash: Optional[str] = None) 
             
             # Case 1: Whole season torrent (season present, episode None)
             if episode is None:
-                logger.debug(f"Fetching season metadata for: {title} S{season}")
+                logger.info(f"📦 Whole season torrent detected: {title} S{season}")
+                logger.info(f"🔍 Fetching season metadata for TV ID {tv_id}, season {season}")
                 season_metadata = tmdb.get_season_metadata(tv_id, season, show_title)
                 
                 if season_metadata:
                     # Cache and return season metadata
                     cache.set(title, season_metadata, parsed.get('year'), season, episode)
-                    logger.debug(f"Successfully fetched season metadata for: {title} S{season}")
+                    logger.info(f"✅ Successfully fetched season metadata for: {title} S{season}")
+                    logger.info(f"   Description: {season_metadata.get('description', '')[:100]}...")
+                    logger.info(f"   Poster: {season_metadata.get('poster_url', 'None')}")
                     return season_metadata
                 else:
                     # Fallback to show-level metadata
-                    logger.debug(f"Season metadata not found, falling back to show metadata for: {title}")
+                    logger.info(f"⚠️ Season metadata not found, falling back to show metadata for: {title}")
                     cache.set(title, show_metadata, parsed.get('year'), season, episode)
                     return show_metadata
             
             # Case 2: Single episode torrent (both season and episode present)
             else:
-                logger.debug(f"Fetching episode metadata for: {title} S{season}E{episode}")
+                logger.info(f"🎬 Single episode torrent detected: {title} S{season}E{episode}")
+                logger.info(f"🔍 Fetching episode metadata for TV ID {tv_id}, S{season}E{episode}")
                 episode_metadata = tmdb.get_episode_metadata(tv_id, season, episode, show_title)
                 
                 if episode_metadata:
                     # Cache and return episode metadata
                     cache.set(title, episode_metadata, parsed.get('year'), season, episode)
-                    logger.debug(f"Successfully fetched episode metadata for: {title} S{season}E{episode}")
+                    logger.info(f"✅ Successfully fetched episode metadata for: {title} S{season}E{episode}")
+                    logger.info(f"   Description: {episode_metadata.get('description', '')[:100]}...")
+                    logger.info(f"   Poster: {episode_metadata.get('poster_url', 'None')}")
                     return episode_metadata
                 else:
                     # Fallback to season metadata
-                    logger.debug(f"Episode metadata not found, trying season metadata for: {title} S{season}")
+                    logger.info(f"⚠️ Episode metadata not found, trying season metadata for: {title} S{season}")
                     season_metadata = tmdb.get_season_metadata(tv_id, season, show_title)
                     
                     if season_metadata:
                         cache.set(title, season_metadata, parsed.get('year'), season, episode)
-                        logger.debug(f"Using season metadata as fallback for: {title} S{season}E{episode}")
+                        logger.info(f"✅ Using season metadata as fallback for: {title} S{season}E{episode}")
                         return season_metadata
                     else:
                         # Final fallback to show-level metadata
-                        logger.debug(f"Season metadata not found, falling back to show metadata for: {title}")
+                        logger.info(f"⚠️ Season metadata not found, falling back to show metadata for: {title}")
                         cache.set(title, show_metadata, parsed.get('year'), season, episode)
                         return show_metadata
         
