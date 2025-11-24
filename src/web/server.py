@@ -52,6 +52,13 @@ def get_tmdb_client() -> Optional[TMDBClient]:
     return _tmdb_client
 
 
+def clear_metadata_cache() -> None:
+    """Clear the metadata cache. Useful for debugging or when cache format changes."""
+    cache = get_metadata_cache()
+    cache.clear()
+    logger.info("Metadata cache cleared")
+
+
 def get_torrent_metadata(torrent_name: str, torrent_hash: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     Get metadata for a torrent by parsing its name and looking up in TMDB.
@@ -107,8 +114,36 @@ def get_torrent_metadata(torrent_name: str, torrent_hash: Optional[str] = None) 
     cache = get_metadata_cache()
     cached = cache.get(title, parsed.get('year'), season, episode)
     if cached:
-        logger.info(f"✅ Found cached metadata for: {title} (season: {season}, episode: {episode})")
-        return cached
+        # Validate that cached metadata matches what we're looking for
+        cached_season = cached.get('season')
+        cached_episode = cached.get('episode')
+        
+        # If we're looking for season/episode-specific metadata, verify the cache has it
+        if season is not None:
+            # Check if cached metadata actually has season/episode info
+            if cached_season != season or (episode is not None and cached_episode != episode):
+                logger.warning(f"⚠️ Cached metadata mismatch! Requested S{season}E{episode}, but cache has S{cached_season}E{cached_episode}. Invalidating cache.")
+                # Remove the incorrect cache entry
+                cache_key = cache._make_key(title, parsed.get('year'), season, episode)
+                cache._cache.pop(cache_key, None)
+                cached = None
+            elif cached_season == season and (episode is None or cached_episode == episode):
+                # Verify it's actually season/episode-specific metadata, not show-level metadata cached incorrectly
+                if cached_season is not None:
+                    logger.info(f"✅ Found cached season/episode metadata for: {title} (season: {season}, episode: {episode})")
+                    logger.debug(f"   Cached description: {cached.get('description', '')[:80]}...")
+                    return cached
+                else:
+                    # This is show-level metadata incorrectly cached with season/episode key
+                    logger.warning(f"⚠️ Found show-level metadata in cache for season/episode request. Invalidating.")
+                    cache_key = cache._make_key(title, parsed.get('year'), season, episode)
+                    cache._cache.pop(cache_key, None)
+                    cached = None
+        
+        # For non-season/episode requests, return cached as-is
+        if cached and season is None:
+            logger.info(f"✅ Found cached metadata for: {title} (season: {season}, episode: {episode})")
+            return cached
     
     # Handle TV shows with season/episode info
     if media_type == 'tv' and season is not None:
@@ -138,7 +173,8 @@ def get_torrent_metadata(torrent_name: str, torrent_hash: Optional[str] = None) 
             if not tv_id:
                 logger.debug(f"No TV ID found in show metadata for: {title}")
                 # Fallback to show-level metadata
-                cache.set(title, show_metadata, parsed.get('year'), season, episode)
+                # Don't cache show-level metadata with season/episode keys
+                logger.info(f"   Note: Returning show-level metadata (no TV ID available) for: {title}")
                 return show_metadata
             
             # Case 1: Whole season torrent (season present, episode None)
@@ -157,7 +193,10 @@ def get_torrent_metadata(torrent_name: str, torrent_hash: Optional[str] = None) 
                 else:
                     # Fallback to show-level metadata
                     logger.info(f"⚠️ Season metadata not found, falling back to show metadata for: {title}")
-                    cache.set(title, show_metadata, parsed.get('year'), season, episode)
+                    # Don't cache show-level metadata with season/episode keys - it's misleading
+                    # Instead, cache it without season/episode so it can be reused for general show lookups
+                    logger.info(f"   Note: Caching show-level metadata (not season-specific) for: {title}")
+                    # Still return show metadata, but don't cache it with season/episode to avoid confusion
                     return show_metadata
             
             # Case 2: Single episode torrent (both season and episode present)
@@ -185,7 +224,9 @@ def get_torrent_metadata(torrent_name: str, torrent_hash: Optional[str] = None) 
                     else:
                         # Final fallback to show-level metadata
                         logger.info(f"⚠️ Season metadata not found, falling back to show metadata for: {title}")
-                        cache.set(title, show_metadata, parsed.get('year'), season, episode)
+                        # Don't cache show-level metadata with season/episode keys - it's misleading
+                        logger.info(f"   Note: Caching show-level metadata (not episode/season-specific) for: {title}")
+                        # Still return show metadata, but don't cache it with season/episode to avoid confusion
                         return show_metadata
         
         except Exception as e:
