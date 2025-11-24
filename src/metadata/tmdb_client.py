@@ -293,27 +293,26 @@ class TMDBClient:
                     return None
                 episode_dict = self._to_dict(episode_data)
             
-            # Extract episode still
-            still_path = episode_dict.get('still_path') or ''
+            # For episodes, always use season poster (not episode still)
             poster_url = None
-            if still_path:
-                poster_url = f"https://image.tmdb.org/t/p/w500{still_path}"
+            try:
+                season_metadata = self.get_season_metadata(tv_id, season_number, show_title)
+                if season_metadata:
+                    poster_url = season_metadata.get('poster_url')
+                    if poster_url:
+                        logger.info(f"✅ Using season poster for episode S{season_number}E{episode_number}")
+                    else:
+                        logger.debug(f"Season metadata found but no poster URL for S{season_number}E{episode_number}")
+            except Exception as e:
+                logger.debug(f"Could not get season poster: {e}")
             
-            # Fallback to season poster if episode still not available
-            if not poster_url:
-                try:
-                    season_metadata = self.get_season_metadata(tv_id, season_number, show_title)
-                    if season_metadata:
-                        poster_url = season_metadata.get('poster_url')
-                except Exception:
-                    pass
-            
-            # Fallback to show poster if still no poster
+            # Fallback to show poster if no season poster available
             if not poster_url and show_title:
                 try:
                     show_metadata = self.search_tv_show(show_title)
                     if show_metadata:
                         poster_url = show_metadata.get('poster_url')
+                        logger.info(f"⚠️ Using show poster as fallback for episode S{season_number}E{episode_number} (no season poster)")
                 except Exception:
                     pass
             

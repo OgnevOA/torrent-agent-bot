@@ -129,9 +129,24 @@ def get_torrent_metadata(torrent_name: str, torrent_hash: Optional[str] = None) 
                 cached = None
             elif cached_season == season and (episode is None or cached_episode == episode):
                 # Verify it's actually season/episode-specific metadata, not show-level metadata cached incorrectly
-                if cached_season is not None:
+                # Old cached entries might have season/episode fields but contain show-level content
+                # Check if this looks like it was actually fetched as season/episode-specific metadata
+                # by verifying it has a reasonable description (not empty, and different from typical show descriptions)
+                cached_description = cached.get('description', '')
+                
+                # If description is empty or very generic, it might be stale show-level metadata
+                # Also check if genres are present (show-level has genres, season/episode usually doesn't)
+                cached_genres = cached.get('genres', [])
+                
+                # If it has genres (which season/episode metadata shouldn't have), it's likely show-level metadata
+                if cached_genres and len(cached_genres) > 0:
+                    logger.warning(f"⚠️ Cached entry has genres (indicates show-level metadata). Invalidating season/episode cache entry.")
+                    cache_key = cache._make_key(title, parsed.get('year'), season, episode)
+                    cache._cache.pop(cache_key, None)
+                    cached = None
+                elif cached_season is not None:
                     logger.info(f"✅ Found cached season/episode metadata for: {title} (season: {season}, episode: {episode})")
-                    logger.debug(f"   Cached description: {cached.get('description', '')[:80]}...")
+                    logger.debug(f"   Cached description: {cached_description[:80] if cached_description else '(empty)'}...")
                     return cached
                 else:
                     # This is show-level metadata incorrectly cached with season/episode key
@@ -425,6 +440,17 @@ def serve_static(filename):
 def health():
     """Health check endpoint."""
     return jsonify({'status': 'ok', 'message': 'Flask server is running'})
+
+
+@app.route('/api/clear-cache', methods=['POST'])
+def clear_cache():
+    """Clear the metadata cache. Useful for debugging."""
+    try:
+        clear_metadata_cache()
+        return jsonify({'status': 'ok', 'message': 'Metadata cache cleared'})
+    except Exception as e:
+        logger.error(f"Error clearing cache: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 @app.route('/api/torrents', methods=['GET'])
